@@ -7,14 +7,16 @@ CI that proves it, and cutting the cord to Wonder Unit's infrastructure.
 ## What changed
 
 ### Reproducible build + Node pin
-- **`.nvmrc`** pins Node **18**; **`package.json` `engines`** enforces `>=18 <21`.
+- **`.nvmrc`** pins Node **18**; **`package.json` `engines`** declares `>=18 <21`.
 - The build is still **webpack 4**, whose md4 hashing fails with
   `ERR_OSSL_EVP_UNSUPPORTED` (`error:0308010C: digital envelope routines::unsupported`)
   on every OpenSSL-3 Node — that's Node 17+, **including Node 18**. So `.nvmrc`=18 does
   *not* dodge it: the `build`/`start` scripts set `NODE_OPTIONS=--openssl-legacy-provider`
-  via `cross-env` (verified: full `npm run build`, all 7 targets, exit 0). This goes
-  away with the Phase 1 webpack 5 migration. (CI caught the original omission — the
-  build failed on `build:xr` before the flag was baked into the scripts.)
+  via `cross-env` (verified: full `npm run build`, all 7 targets, exit 0). The one
+  wrinkle — **Electron refuses to launch with that flag set** — is handled by
+  `start:electron` clearing `NODE_OPTIONS` again, so `npm start` runs both the webpack
+  watchers and the app. This goes away with the Phase 1 webpack 5 migration. (CI caught
+  the original omission — the build failed on `build:xr` before the flag was baked in.)
 - `npm install --legacy-peer-deps` is the documented install command (peer-dep
   conflicts otherwise). Verified: a clean install resolves the full tree — Electron
   18.0.2, the `github:wonderunit/alchemancy` pin, the `file:` vendored `tether-*`
