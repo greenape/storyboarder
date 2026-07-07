@@ -22,7 +22,7 @@ const electron = require('electron') // resolves to the electron binary path
 const fixture =
   process.argv[2] || path.join('test', 'fixtures', 'example', 'example.storyboarder')
 
-const SETTLE_MS = 12000
+const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
 
 // Renderer/main failures that mean the app is broken.
 const FATAL = [
