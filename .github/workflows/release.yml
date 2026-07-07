@@ -1,0 +1,64 @@
+name: Release build
+
+# Produces installable app builds on demand (Actions → "Release build" → Run) and for
+# version tags, and uploads them as workflow artifacts people can download.
+#
+# Notes / current limits:
+#   * Unsigned. Signing/notarization is skipped (CSC_IDENTITY_AUTO_DISCOVERY=false), so
+#     macOS Gatekeeper warns ("unidentified developer" — right-click → Open, or
+#     `xattr -dr com.apple.quarantine Storyboarder.app`). Wire in the owner's Apple /
+#     Windows credentials as secrets to remove that friction.
+#   * macOS is arm64 (Apple Silicon) only: npmRebuild is off (the Electron 42 toolchain
+#     can't rebuild some old dev-only native deps — see package.json), so a universal /
+#     x64 build would ship single-arch native modules. Revisit with the webpack 5 work.
+#   * Linux ships an AppImage (portable, no install). Windows isn't built here yet.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: dist:mac
+            out: dist/*.dmg
+          - os: ubuntu-latest
+            script: dist:linux
+            out: dist/*.AppImage
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install server deps
+        run: npm install --legacy-peer-deps
+        working-directory: server
+
+      - name: Install deps
+        run: npm install --legacy-peer-deps
+
+      - name: Package (unsigned)
+        run: npm run ${{ matrix.script }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: storyboarder-${{ runner.os }}
+          path: ${{ matrix.out }}
+          if-no-files-found: error

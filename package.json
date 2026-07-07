@@ -17,7 +17,7 @@
     "start:server": "cd server && npm run start",
     "start:electron": "cross-env NODE_ENV=development NODE_OPTIONS= electron .",
     "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider npm-run-all --parallel start:*",
-    "dist:mac": "npm run build && electron-builder build -m --arm64 --x64",
+    "dist:mac": "npm run build && electron-builder build -m --arm64",
     "dist:win": "npm run build && electron-builder build -w",
     "dist:linux": "npm run build && electron-builder build -l",
     "dist": "npm run build && electron-builder build -mwl",
@@ -62,6 +62,7 @@
     "asar": true,
     "appId": "net.nanosheep.storyboarder",
     "buildDependenciesFromSource": true,
+    "npmRebuild": false,
     "compression": "maximum",
     "publish": [
       {
@@ -91,10 +92,7 @@
       "gatekeeperAssess": false
     },
     "win": {
-      "icon": "build/icon.ico",
-      "timeStampServer": "http://timestamp.comodoca.com/authenticode",
-      "certificateSubjectName": "Wonder Unit, Inc.",
-      "publisherName": "Wonder Unit, Inc."
+      "icon": "build/icon.ico"
     },
     "dmg": {
       "sign": false,
@@ -120,9 +118,7 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "snap",
-        "deb"
+        "AppImage"
       ],
       "icon": "build/icon.icns",
       "synopsis": "The fastest way to storyboard.",
