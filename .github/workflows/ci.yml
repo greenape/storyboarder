@@ -12,9 +12,13 @@ name: CI
 #   * `npm run test:node` runs the pure-Node unit suite. Two legacy filesystem
 #     tests (copy-project, cleanup) are excluded there because they depend on
 #     mock-fs@4.10.1, which does not work on modern Node — tracked for repair.
-#   * The Electron renderer/main tests (`electron-mocha`, part of `npm test`) need a
-#     display and are deferred until the Phase 1 Electron modernization; enable them
-#     here (macOS window server / xvfb on Linux) once they run headless reliably.
+#   * `npm run test:smoke` launches the real app under xvfb on Linux, opens a fixture
+#     storyboard, and asserts boards render with no fatal renderer errors — the runtime
+#     gate for the Electron modernization (a green build does not prove the app runs).
+#     Covers the 2D main window; the shot-generator/XR/AR windows need driving the UI
+#     (a future Playwright harness, viable once contextIsolation lands).
+#   * The Electron renderer/main tests (`electron-mocha`, part of `npm test`) are still
+#     deferred until they run headless reliably.
 
 on:
   push:
@@ -54,3 +58,19 @@ jobs:
 
       - name: Unit tests (Node)
         run: npm run test:node
+
+      # Runtime smoke: launch the real app and confirm it renders. Linux-only because
+      # xvfb gives Electron a headless display reliably; the GitHub macOS runners have
+      # no window server for a GUI launch.
+      - name: Install Electron runtime libs + xvfb (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0 libnotify-dev libnss3 libxss1 \
+            libxtst6 xauth libasound2t64 libatk-bridge2.0-0 libgbm1 libgdk-pixbuf-2.0-0
+
+      - name: Smoke test (Linux, xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:smoke
+        env:
+          SMOKE_SETTLE_MS: "45000"

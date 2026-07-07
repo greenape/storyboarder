@@ -22,10 +22,11 @@ const electron = require('electron') // resolves to the electron binary path
 const fixture =
   process.argv[2] || path.join('test', 'fixtures', 'example', 'example.storyboarder')
 
-const SETTLE_MS = 12000
+const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
 
 // Renderer/main failures that mean the app is broken.
 const FATAL = [
+  /\bFATAL:/, // Chromium/Electron hard aborts (e.g. sandbox misconfigured — app never launches)
   /Cannot find module/i,
   /\b(require|remote|module|process|ipcRenderer|__dirname) is not defined/i,
   /Uncaught (Error|TypeError|ReferenceError)/,
@@ -45,8 +46,13 @@ const BENIGN = [
 // Evidence the main storyboard window actually rendered the fixture's boards.
 const RENDERED = [/BOARD PATH:/, /loadSketchPaneLayers/, /load layer \d+ board-/]
 
+// On Linux CI the Chromium SUID sandbox helper isn't set up (and can't be under
+// xvfb), so Electron hard-aborts unless we disable it. macOS keeps its real sandbox.
+const args = ['.', fixture]
+if (process.platform === 'linux') args.push('--no-sandbox')
+
 const log = []
-const child = spawn(electron, ['.', fixture], {
+const child = spawn(electron, args, {
   cwd: appDir,
   env: { ...process.env, NODE_ENV: 'development', ELECTRON_ENABLE_LOGGING: '1' },
 })
@@ -78,6 +84,15 @@ function finish() {
   fatals.slice(0, 25).forEach((l) => console.log(`  [fatal] ${l.trim()}`))
 
   const ok = rendered && fatals.length === 0
+  if (!ok) {
+    // Diagnostics for CI: which render markers were seen, and the tail of the app log.
+    console.log('--- render markers ---')
+    for (const re of RENDERED) console.log(`  ${re.test(text) ? 'seen' : 'MISSING'}: ${re}`)
+    const tail = lines.filter((l) => l.trim()).slice(-40)
+    console.log(`--- app log tail (${tail.length} lines) ---`)
+    for (const l of tail) console.log(`  ${l.replace(/\[[0-9;]*m/g, '').trim().slice(0, 200)}`)
+    console.log('--- end tail ---')
+  }
   console.log(ok ? 'SMOKE PASS' : 'SMOKE FAIL')
   process.exit(ok ? 0 : 1)
 }
