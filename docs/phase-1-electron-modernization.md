@@ -166,14 +166,22 @@ smoke-test (see §8) before merge** — the build passing is necessary but not s
 
 ## 8. Runtime-verification protocol (why this can't be fully CI-gated)
 Phase 1's acceptance is about *runtime* behaviour, and the webpack build treats `electron`
-as external — **a green build does not prove the app runs.** Each slice must be smoke-tested
-on a machine with a display:
-- App launches; open a legacy `.storyboarder`, add/reorder boards, toggle a shot, draw.
-- Dialogs (open/save/export), prefs changes persist, external links open.
-- For slice 4+: Shot Generator opens, a character poses, camera moves; XR/AR entry loads.
-- Confirm **no** `Cannot read properties of undefined (reading 'require')` /
-  `remote is not defined` / contextIsolation errors in the devtools console.
+as external — **a green build does not prove the app runs.**
+
+**Automated gate — `npm run test:smoke`** (`test/e2e/smoke.js`): launches the app on a real
+display, opens a fixture storyboard, and asserts it renders boards with **zero fatal
+renderer errors** (module-not-found, `require`/`remote` is-not-defined, contextIsolation
+breakage, uncaught exceptions). Verified green on the pre-Phase-1 baseline. Run it after
+every slice. It drives the app *bare* (child_process + `ELECTRON_ENABLE_LOGGING`), not via
+Playwright: Playwright's renderer instrumentation is incompatible with the current app's
+legacy inline-`require()` nodeIntegration windows — **once the contextIsolation migration
+lands, a Playwright harness that also drives the UI (click, assert DOM) supersedes this**
+and can move into CI (macOS runners have a display).
+
+**Manual smoke (per slice, until the Playwright harness exists):** open/reorder boards,
+toggle a shot, draw; dialogs (open/save/export); prefs persist; external links. For slice
+4+: Shot Generator opens, a character poses, camera moves; XR/AR entry loads.
 
 CI (from Phase 0) continues to gate install + build + `test:node`; extend it with the
-Electron `*.main.test.js` suite once the bridge handlers exist (they're testable headlessly
-in the main process). The renderer GUI smoke-tests stay manual until an e2e harness exists.
+Electron `*.main.test.js` suite once the bridge handlers exist (testable headlessly in the
+main process), then the Playwright UI smoke once windows are contextIsolated.
