@@ -4,6 +4,9 @@
   "version": "3.0.0",
   "description": "The fastest way to storyboard.",
   "main": "src/js/main.js",
+  "engines": {
+    "node": ">=18 <21"
+  },
   "scripts": {
     "start:xr": "webpack --mode=development --watch --progress --config configs/xr/webpack.config.js",
     "start:ar": "webpack --mode=development --watch --progress --config configs/ar/webpack.config.js",
@@ -19,6 +22,8 @@
     "dist:linux": "npm run build && electron-builder build -l",
     "dist": "npm run build && build -mwl",
     "test": "mocha $(find test -name '*[!renderer].test.js') && electron-mocha --renderer test/*.renderer.test.js test/**/*.renderer.test.js && electron-mocha test/**/*.main.test.js",
+    "test:node": "mocha $(find test -name '*[!renderer].test.js' -not -name 'copy-project.test.js' -not -name 'cleanup.test.js')",
+    "test:node:all": "mocha $(find test -name '*[!renderer].test.js')",
     "clean:fixtures": "git checkout test/fixtures && git clean test/fixtures -f",
     "clean:xr": "trash src/js/xr/dist",
     "clean:ar": "trash src/js/ar/dist",
@@ -39,7 +44,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wonderunit/storyboarder.git"
+    "url": "git+https://github.com/greenape/storyboarder.git"
   },
   "keywords": [
     "fountain",
@@ -54,9 +59,16 @@
     "beforeBuild": "scripts/electron-builder-before-build.js",
     "afterSign": "scripts/notarize.js",
     "asar": true,
-    "appId": "com.wonderunit.storyboarder",
+    "appId": "net.nanosheep.storyboarder",
     "buildDependenciesFromSource": true,
     "compression": "maximum",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "greenape",
+        "repo": "storyboarder"
+      }
+    ],
     "files": [
       "!*.md",
       "!DEVELOPERS.md",

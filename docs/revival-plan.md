@@ -248,6 +248,9 @@ its own PR against this branch; keep phases independently revertible.
 
 ### Phase 0 — Foundation: reproducible build + CI + de-Wonder-Unit
 
+> **Status: delivered (first pass)** — see [`phase-0-foundation.md`](./phase-0-foundation.md)
+> for what changed, the de-Wonder-Unit decisions, and what still needs a full build host.
+
 **Objective:** anyone can clone, install, build, run, and package on a modern Mac,
 and CI proves it on every push. Cut the cord to Wonder Unit's infrastructure.
 

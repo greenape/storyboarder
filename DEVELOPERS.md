@@ -1,12 +1,30 @@
 # Notes for Developers
 
-Tested with Node.js 18 LTS.
+## Requirements
+
+Use **Node.js 18** — it's pinned in `.nvmrc` and enforced by the `engines` field in
+`package.json`. If you use `nvm`, run `nvm use`.
+
+Node 18 matters because the build still runs on **webpack 4**, which throws
+`ERR_OSSL_EVP_UNSUPPORTED` (`error:0308010C: digital envelope routines::unsupported`)
+on Node 17+ due to the OpenSSL 3 change. If you must run a newer Node before the
+Phase 1 webpack 5 migration, export the legacy provider first:
+
+    $ export NODE_OPTIONS=--openssl-legacy-provider
 
 ## Developing
 
-    $ cd server && npm install && cd ..
-    $ npm install
+Installs can hit peer-dependency conflicts on modern npm, so use `--legacy-peer-deps`:
+
+    $ cd server && npm install --legacy-peer-deps && cd ..
+    $ npm install --legacy-peer-deps
     $ npm start
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and PR: it installs, builds all
+webpack targets, and runs the Node unit suite (`npm run test:node`) on macOS and
+Linux. Keep it green before merging.
 
 ## Loading Storyboards via Command Line
 

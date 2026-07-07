@@ -43,15 +43,20 @@ const isUserFile = string => {
 // const { app } = require('@electron/remote')
 // path.join(app.getAppPath(), 'src', 'data', 'shot-generator')
 
-const pathToShotGeneratorData =
+// Resolved lazily: `window.__dirname` only exists in the renderer, so computing
+// this at module-load time crashes when the module is required in a plain Node
+// context (e.g. the test suite / CI). It is only read via builtInFolder() below,
+// which runs in the renderer where window.__dirname is set, so this is behaviour-
+// preserving there.
+const pathToShotGeneratorData = () =>
   path.join(window.__dirname, 'data', 'shot-generator')
 
 // calculate filepath
 const builtInFolder = type => ({
-  'object': path.join(pathToShotGeneratorData, 'objects'),
-  'character': path.join(pathToShotGeneratorData, 'dummies', 'gltf'),
-  'attachable': path.join(pathToShotGeneratorData, 'attachables'),
-  'xr': path.join(pathToShotGeneratorData, 'xr')
+  'object': path.join(pathToShotGeneratorData(), 'objects'),
+  'character': path.join(pathToShotGeneratorData(), 'dummies', 'gltf'),
+  'attachable': path.join(pathToShotGeneratorData(), 'attachables'),
+  'xr': path.join(pathToShotGeneratorData(), 'xr')
 }[type])
 
 const projectFolder = type => ({
