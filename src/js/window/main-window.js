@@ -1,7 +1,6 @@
 require('electron-redux/preload')
 const {ipcRenderer, shell, nativeImage, clipboard} = require('electron')
-const remote = require('@electron/remote')
-const remoteMain = remote.require('@electron/remote/main')
+const remote = require('../shared/remote-compat')
 const { app } = remote
 const child_process = require('child_process')
 const fs = require('fs-extra')
@@ -315,8 +314,6 @@ let sceneTimelineView
 
 let storyboarderSketchPane
 let fakePosterFrameCanvas
-
-let exportWebWindow
 
 let dragMode = false
 let preventDragMode = false
@@ -6581,43 +6578,10 @@ const exportWeb = async () => {
   }
 }
 const showSignInWindow = () => {
-  if (exportWebWindow) {
-    exportWebWindow.destroy()
-  }
-
   textInputMode = true
   textInputAllowAdvance = false
-
-  exportWebWindow = new remote.BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 600,
-    minHeight: 600,
-    backgroundColor: '#333333',
-    show: false,
-    center: true,
-    parent: remote.getCurrentWindow(),
-    resizable: true,
-    frame: false,
-    modal: true,
-    webPreferences: {
-      webgl: true,
-      experimentalFeatures: true,
-      experimentalCanvasFeatures: true,
-      devTools: true,
-      plugins: true,
-      nodeIntegration: true,
-      contextIsolation: false
-    }
-  })
-  remoteMain.enable(exportWebWindow.webContents)
-  exportWebWindow.loadURL(`file://${__dirname}/../../upload.html`)
-  exportWebWindow.once('ready-to-show', () => {
-    exportWebWindow.show()
-  })
-  exportWebWindow.on('hide', () => {
-    ipcRenderer.send('textInputMode', false)
-  })
+  // The window is created and managed in main (see main/child-windows.js).
+  ipcRenderer.send('child-window:open-export-web')
 }
 ipcRenderer.on('signInSuccess', (event, response) => {
   notifications.notify({ message: 'Success! You’re Signed In!' })
@@ -6973,37 +6937,9 @@ ipcRenderer.on('importNotification', () => {
   }
 })
 
-let importWindow
 ipcRenderer.on('importWorksheets', (event, args) => {
-  if (!importWindow) {
-    importWindow = new remote.BrowserWindow({
-      width: 1200,
-      height: 800,
-      minWidth: 600,
-      minHeight: 600,
-      backgroundColor: '#333333',
-      show: false,
-      center: true,
-      parent: remote.getCurrentWindow(),
-      resizable: true,
-      frame: false,
-      modal: true,
-      webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
-      }
-    })
-    remoteMain.enable(importWindow.webContents)
-    importWindow.loadURL(`file://${__dirname}/../../import-window.html`)
-  } else {
-    if (!importWindow.isVisible()) {
-      importWindow.webContents.send('worksheetImage',args)
-    }
-  }
-
-  importWindow.once('ready-to-show', () => {
-    importWindow.webContents.send('worksheetImage',args)
-  })
+  // The window is created and managed in main (see main/child-windows.js).
+  ipcRenderer.send('child-window:open-import', args)
   ipcRenderer.send('analyticsEvent', 'Board', 'show import window')
 })
 

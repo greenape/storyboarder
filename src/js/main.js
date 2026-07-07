@@ -25,6 +25,9 @@ prefModule.init(path.join(app.getPath('userData'), 'pref.json'))
 
 // Curated IPC replacement for @electron/remote (renderers use shared/remote-compat).
 require('./main/remote-bridge').install()
+// Main-process creation of the export-web / import child windows (formerly created
+// from the main-window renderer via remote.BrowserWindow).
+require('./main/child-windows').install()
 
 
 const configureStore = require('./shared/store/configureStore')
