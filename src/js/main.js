@@ -1,5 +1,13 @@
 const remoteMain = require('@electron/remote/main')
 remoteMain.initialize()
+
+// Electron 42 / newer Node: process.mainModule no longer points at the app entry,
+// so @electron/remote resolves remote.require('./relative') against Electron's
+// internal main module and throws "Cannot find module './prefs'". Point it back at
+// this module (the app entry) so relative remote.require keeps working. Temporary —
+// removed when the preload bridge replaces @electron/remote (Phase 1, Track A).
+process.mainModule = module
+
 const {app, ipcMain, BrowserWindow, dialog, powerSaveBlocker} = electron = require('electron')
 
 const fs = require('fs-extra')
