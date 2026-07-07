@@ -26,6 +26,7 @@ const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
 
 // Renderer/main failures that mean the app is broken.
 const FATAL = [
+  /\bFATAL:/, // Chromium/Electron hard aborts (e.g. sandbox misconfigured — app never launches)
   /Cannot find module/i,
   /\b(require|remote|module|process|ipcRenderer|__dirname) is not defined/i,
   /Uncaught (Error|TypeError|ReferenceError)/,
@@ -45,8 +46,13 @@ const BENIGN = [
 // Evidence the main storyboard window actually rendered the fixture's boards.
 const RENDERED = [/BOARD PATH:/, /loadSketchPaneLayers/, /load layer \d+ board-/]
 
+// On Linux CI the Chromium SUID sandbox helper isn't set up (and can't be under
+// xvfb), so Electron hard-aborts unless we disable it. macOS keeps its real sandbox.
+const args = ['.', fixture]
+if (process.platform === 'linux') args.push('--no-sandbox')
+
 const log = []
-const child = spawn(electron, ['.', fixture], {
+const child = spawn(electron, args, {
   cwd: appDir,
   env: { ...process.env, NODE_ENV: 'development', ELECTRON_ENABLE_LOGGING: '1' },
 })
