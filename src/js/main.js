@@ -23,6 +23,9 @@ const EventEmitter = require('events')
 const prefModule = require('./prefs')
 prefModule.init(path.join(app.getPath('userData'), 'pref.json'))
 
+// Curated IPC replacement for @electron/remote (renderers use shared/remote-compat).
+require('./main/remote-bridge').install()
+
 
 const configureStore = require('./shared/store/configureStore')
 const defaultKeyMap = require('./shared/helpers/defaultKeyMap')
