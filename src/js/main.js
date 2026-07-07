@@ -1,6 +1,3 @@
-const remoteMain = require('@electron/remote/main')
-remoteMain.initialize()
-
 // Electron 42 / newer Node: process.mainModule no longer points at the app entry,
 // so @electron/remote resolves remote.require('./relative') against Electron's
 // internal main module and throws "Cannot find module './prefs'". Point it back at
@@ -28,6 +25,8 @@ require('./main/remote-bridge').install()
 // Main-process creation of the export-web / import child windows (formerly created
 // from the main-window renderer via remote.BrowserWindow).
 require('./main/child-windows').install()
+// Main-process creation of the Shot Explorer window (formerly via remote.BrowserWindow).
+require('./main/shot-explorer-window').install()
 
 
 const configureStore = require('./shared/store/configureStore')
@@ -398,7 +397,6 @@ let openKeyCommandWindow = () => {
       contextIsolation: false
     }
   })
-  remoteMain.enable(keyCommandWindow.webContents)
   keyCommandWindow.loadURL(`file://${__dirname}/../keycommand-window.html`)
   keyCommandWindow.once('ready-to-show', () => {
     setTimeout(() => keyCommandWindow.show(), 250) // wait for DOM
@@ -435,7 +433,6 @@ let openNewWindow = () => {
         contextIsolation: false
       }
     })
-    remoteMain.enable(newWindow.webContents)
     newWindow.loadURL(`file://${__dirname}/../new.html`)
     newWindow.once('ready-to-show', () => {
       newWindow.show()
@@ -463,7 +460,6 @@ let openWelcomeWindow = () => {
       contextIsolation: false
     }
   })
-  remoteMain.enable(welcomeWindow.webContents)
   welcomeWindow.loadURL(`file://${__dirname}/../welcome.html`)
 
   newWindow = new BrowserWindow({
@@ -479,7 +475,6 @@ let openWelcomeWindow = () => {
       contextIsolation: false
     }
   })
-  remoteMain.enable(newWindow.webContents)
   newWindow.loadURL(`file://${__dirname}/../new.html`)
 
   let recentDocumentsCopy
@@ -1048,7 +1043,6 @@ let loadStoryboarderWindow = (filename, scriptData, locations, characters, board
       contextIsolation: false
     }
   })
-  remoteMain.enable(mainWindow.webContents)
 
   let projectName = path.basename(filename, path.extname(filename))
   loadingStatusWindow = new BrowserWindow({
@@ -1063,7 +1057,6 @@ let loadStoryboarderWindow = (filename, scriptData, locations, characters, board
       contextIsolation: false
     }
   })
-  remoteMain.enable(loadingStatusWindow.webContents)
   loadingStatusWindow.loadURL(`file://${__dirname}/../loading-status.html?name=${encodeURIComponent(projectName)}`)
   loadingStatusWindow.once('ready-to-show', () => {
     loadingStatusWindow.show()

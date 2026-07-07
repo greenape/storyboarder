@@ -1,4 +1,3 @@
-const remoteMain = require('@electron/remote/main')
 const { BrowserWindow } = require('electron')
 
 let win
@@ -41,7 +40,6 @@ const show = () => {
       contextIsolation: false
     }
   })
-  remoteMain.enable(win.webContents)
   win.once('closed', () => {
     win = null
   })

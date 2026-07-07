@@ -1,4 +1,3 @@
-const remoteMain = require('@electron/remote/main')
 const { BrowserWindow } = require('electron')
 
 module.exports = () => {
@@ -23,7 +22,6 @@ module.exports = () => {
         contextIsolation: false
       }
     })
-    remoteMain.enable(win.webContents)
 
     win.once('closed', () => {
       win = null
