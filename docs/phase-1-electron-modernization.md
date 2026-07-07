@@ -1,8 +1,28 @@
 # Phase 1 — Electron modernization: bump + `@electron/remote` removal + contextIsolation
 
-> Status: **plan / kickoff**. Continues `revival-plan.md` §4 "Phase 1". Written after a
+> Status: **in progress**. Continues `revival-plan.md` §4 "Phase 1". Written after a
 > full inventory of `master` (post-Phase-0), so file counts and API surfaces below are
 > ground truth. Execute in the sequenced slices in §6 — one PR each.
+>
+> **Progress (Track A):**
+> - ✅ **Electron 18 → 42.6.0 bump** (electron-builder 26, @electron/remote 2.1.3 en route
+>   to removal). App launches and renders on Electron 42; verified by `npm run test:smoke`.
+> - ✅ **`@electron/remote` fully removed** — 67 uses across 57 files replaced by a curated
+>   IPC bridge (`main/remote-bridge.js` + `shared/remote-compat.js`); the three renderer
+>   window-creators moved to main (`main/child-windows.js`, `main/shot-explorer-window.js`);
+>   the dependency is gone from package.json/lockfile/node_modules. Verified: smoke + build +
+>   test:node + `npm install` all green on Electron 42.
+> - ✅ **Runtime smoke harness** (`test/e2e/smoke.js`) — launches the app, opens a fixture,
+>   asserts boards render with no fatal renderer errors. The gate every slice above passed.
+> - ✅ Removed the unused `parcel-bundler`; made `postinstall` tolerant of the optional,
+>   dev-only `fsevents` copies that can't build against Electron 42's V8.
+> - ⏳ **Remaining (this doc's §6 slices 2–6 minus remote):** flip windows to
+>   `contextIsolation:true` + `nodeIntegration:false` behind preloads (the large piece —
+>   moves `fs`/`path`/`require('electron')` out of ~50 renderer files and bundles the 11
+>   raw-`require` 2D HTML entrypoints), and replace the `electron-redux` alpha. These need
+>   per-window smoke tests (the current smoke covers the main + welcome windows).
+> - **Manual smoke still owed** on non-main windows migrated off remote: Shot Generator /
+>   Shot Explorer / XR / AR, export-web, worksheet import, and the per-window dialogs.
 
 ## 1. The two tracks (important framing)
 
