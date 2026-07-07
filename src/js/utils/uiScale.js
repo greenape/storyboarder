@@ -1,5 +1,5 @@
 const electron = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 const { webFrame } = electron
 const SettingsService = require('../windows/shot-generator/SettingsService')
 const AutoUIScaler = require('./AutoUIScaler')

@@ -1,7 +1,7 @@
 let i18n = require('i18next')
 let i18nextBackend = require('i18next-fs-backend')
 const { app } = process && process.type == 'renderer'
-  ? require('@electron/remote')
+  ? require('../shared/remote-compat')
   : require('electron')
 const path = require('path')
 const { initReactI18next } = require("react-i18next")

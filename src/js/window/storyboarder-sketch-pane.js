@@ -3,7 +3,7 @@ const paper = require('paper')
 const EventEmitter = require('events').EventEmitter
 
 const { ipcRenderer } = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 
 const fs = require('fs')
 const path = require('path')
@@ -20,7 +20,7 @@ const observeStore = require('../shared/helpers/observeStore')
 
 const sfx = require('../wonderunit-sound')
 
-const prefsModule = require('@electron/remote').require('./prefs')
+const prefsModule = require('../shared/remote-compat').require('./prefs')
 
 // TODO enableBrushCursor see: https://github.com/wonderunit/storyboarder/issues/1102
 const enableBrushCursor = prefsModule.getPrefs('main')['enableBrushCursor']

@@ -1,6 +1,6 @@
 import React, {useCallback, useState} from "react";
 import {Math as _Math} from "three";
-const remote = require('@electron/remote')
+const remote = require('../../../../shared/remote-compat')
 import path from 'path'
 import fs from 'fs-extra'
 const { dialog } = remote

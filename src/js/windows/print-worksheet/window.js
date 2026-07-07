@@ -4,7 +4,7 @@
 // and print-project handles everything else.
 // previously this window handled worksheet AND project printing.
 const {ipcRenderer} = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../../shared/remote-compat')
 const pdf = require('pdfjs-dist')
 const app = remote.app
 const path = require('path')

@@ -6,7 +6,7 @@ import '../../../../vendor/three/examples/js/utils/SkeletonUtils'
 import ThumbnailRenderer from '../../../utils/ThumbnailRenderer'
 import Image from '../../Image'
 import { GUTTER_SIZE, ITEM_WIDTH, ITEM_HEIGHT, IMAGE_HEIGHT, IMAGE_WIDTH } from '../../../utils/InspectorElementsSettings'
-const remote = require('@electron/remote')
+const remote = require('../../../../shared/remote-compat')
 import { useMemo } from 'react'
 import cloneGltf from '../../../helpers/cloneGltf'
 import {patchMaterial} from '../../../helpers/outlineMaterial'

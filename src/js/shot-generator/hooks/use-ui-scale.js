@@ -1,6 +1,6 @@
 import React, { useMemo, useCallback } from 'react'
 import path from 'path'
-const { app } = require('@electron/remote')
+const { app } = require('../../shared/remote-compat')
 import UIScaler from '../../utils/uiScale'
 const useUIScale = () => {
     const scaleBy = useCallback(( event, value ) => {

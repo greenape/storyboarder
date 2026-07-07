@@ -1,4 +1,4 @@
-const remote = require('@electron/remote')
+const remote = require('../../../../shared/remote-compat')
 const { dialog } = remote
 import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { connect } from 'react-redux'

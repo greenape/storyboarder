@@ -1,5 +1,5 @@
 const { ipcRenderer, shell } = electron = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../../shared/remote-compat')
 
 // const https = require('https')
 // https.globalAgent.options.rejectUnauthorized = false;

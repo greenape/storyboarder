@@ -1,5 +1,5 @@
 const { ipcRenderer, shell } = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 
 //#region Localization
 const i18n = require('../services/i18next.config')

@@ -1,5 +1,5 @@
 const { ipcRenderer } = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../../shared/remote-compat')
 const { interpret } = require('xstate')
 const React = require('react')
 const ReactDOM = require('react-dom')

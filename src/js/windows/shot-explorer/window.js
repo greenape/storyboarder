@@ -2,7 +2,7 @@ const ReactDOM = require('react-dom')
 const React = require('react')
 const { ipcRenderer, shell } = electron = require('electron')
 const { Provider, batch } = require('react-redux')
-const remote = require('@electron/remote')
+const remote = require('../../shared/remote-compat')
 const THREE = require('three')
 const { createStore, applyMiddleware, compose } = require('redux')
 const thunkMiddleware = require('redux-thunk').default

@@ -1,10 +1,10 @@
 const {ipcRenderer, shell} = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 const path = require('path')
 const moment = require('moment')
 const menu = require('../menu')
 const sfx = require('../wonderunit-sound')
-const prefsModule = require('@electron/remote').require('./prefs')
+const prefsModule = require('../shared/remote-compat').require('./prefs')
 const log = require('../shared/storyboarder-electron-log')
 const pkg = require('../../../package.json')
 
@@ -123,7 +123,11 @@ document.querySelector('#close-button').onclick = () => {
 }
 
 document.querySelector('iframe').onload = ()=>{
-  Array.prototype.slice.call(document.querySelector('iframe').contentDocument.getElementsByTagName('a')).forEach((element)=>{
+  // The ad iframe is sandbox="allow-scripts" (a unique cross-origin), so under
+  // modern Chromium its contentDocument is null and there is nothing to wire up.
+  let contentDocument = document.querySelector('iframe').contentDocument
+  if (!contentDocument) return
+  Array.prototype.slice.call(contentDocument.getElementsByTagName('a')).forEach((element)=>{
     element.onclick = (e)=> {
       shell.openExternal(e.currentTarget.href)
       e.preventDefault()
@@ -133,7 +137,6 @@ document.querySelector('iframe').onload = ()=>{
   })
 
   // handle dropping a file onto the iframe
-  let contentDocument = document.querySelector('iframe').contentDocument
   contentDocument.ondragover = () => { return false }
   contentDocument.ondragleave = () => { return false }
   contentDocument.ondragend = () => { return false }

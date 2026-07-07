@@ -1,6 +1,6 @@
 import React, {useCallback} from 'react'
 
-const remote = require('@electron/remote')
+const remote = require('../../../shared/remote-compat')
 const {dialog} = remote
 
 const FileInput = React.memo(({

@@ -8,7 +8,7 @@ import FatalErrorBoundary from '../shot-generator/components/FatalErrorBoundary'
 import {OutlineEffect} from '../vendor/OutlineEffect'
 import {cache} from '../shot-generator/hooks/use-assets-manager'
 import TWEEN from '@tweenjs/tween.js'
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 
 import FilepathsContext from '../shot-generator/contexts/filepaths'
 const {

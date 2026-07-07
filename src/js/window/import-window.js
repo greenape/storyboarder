@@ -16,7 +16,7 @@
 */
 
 const { ipcRenderer, shell } = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 const { app } = remote
 const path = require('path')
 const fs = require('fs')
@@ -24,7 +24,7 @@ const QrCode = require('qrcode-reader')
 
 const jsfeat = require('../vendor/jsfeat-min')
 
-const prefModule = require('@electron/remote').require('./prefs')
+const prefModule = require('../shared/remote-compat').require('./prefs')
 
 let sourceImage
 let flatImage
