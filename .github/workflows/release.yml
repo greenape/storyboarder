@@ -31,10 +31,10 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            script: dist:mac
+            eb: --mac dmg --arm64
             out: dist/*.dmg
           - os: ubuntu-latest
-            script: dist:linux
+            eb: --linux AppImage
             out: dist/*.AppImage
     steps:
       - uses: actions/checkout@v4
@@ -51,8 +51,14 @@ jobs:
       - name: Install deps
         run: npm install --legacy-peer-deps
 
+      - name: Build (webpack targets)
+        run: npm run build
+
+      # --publish never: build.publish points at our GitHub Releases, which would
+      # otherwise make electron-builder try to upload (needs GH_TOKEN). We upload the
+      # artifacts ourselves below instead.
       - name: Package (unsigned)
-        run: npm run ${{ matrix.script }}
+        run: npx electron-builder ${{ matrix.eb }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
