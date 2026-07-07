@@ -1,4 +1,4 @@
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 const EventEmitter = require('events').EventEmitter
 const Color = require('color-js')
 

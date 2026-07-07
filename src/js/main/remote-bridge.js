@@ -89,21 +89,29 @@ function install () {
     }
   })
 
+  // remote.process.mainModule — only .filename is read (asar-path detection).
+  ipcMain.on('remote-compat:main-module', (event) => {
+    const m = process.mainModule || require.main
+    event.returnValue = m && m.filename ? { filename: m.filename } : undefined
+  })
+
   // remote.require('electron-is-dev')
   ipcMain.on('remote-compat:is-dev', (event) => {
-    event.returnValue = require('electron-is-dev')
+    try { event.returnValue = require('electron-is-dev') } catch (_e) { event.returnValue = false }
   })
 
   // Shared main-process prefs instance (remote.require('./prefs')).
+  // NB: these are sendSync — a thrown error would hang the calling renderer forever
+  // (no reply), so every handler must set event.returnValue on all paths.
   ipcMain.on('remote-compat:prefs-get', (event, key) => {
-    event.returnValue = prefs.getPrefs(key)
+    try { event.returnValue = prefs.getPrefs(key) } catch (_e) { event.returnValue = undefined }
   })
   ipcMain.on('remote-compat:prefs-set', (event, keyPath, value, sync) => {
-    prefs.set(keyPath, value, sync)
+    try { prefs.set(keyPath, value, sync) } catch (_e) { /* ignore */ }
     event.returnValue = true
   })
   ipcMain.on('remote-compat:prefs-save', (event) => {
-    prefs.savePrefs()
+    try { prefs.savePrefs() } catch (_e) { /* ignore */ }
     event.returnValue = true
   })
 }

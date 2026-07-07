@@ -12,7 +12,7 @@ const isUsingAsar = () => {
   if (!('electron' in process.versions)) return
 
   let mainModule = process.type == 'renderer'
-    ? require('@electron/remote').process.mainModule
+    ? require('../shared/remote-compat').process.mainModule
     : require.main
 
   return mainModule && mainModule.filename.includes('app.asar')

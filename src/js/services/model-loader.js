@@ -40,7 +40,7 @@ const isUserFile = string => {
 
 // TODO could use app.getAppPath() instead?
 //
-// const { app } = require('@electron/remote')
+// const { app } = require('../shared/remote-compat')
 // path.join(app.getAppPath(), 'src', 'data', 'shot-generator')
 
 // Resolved lazily: `window.__dirname` only exists in the renderer, so computing

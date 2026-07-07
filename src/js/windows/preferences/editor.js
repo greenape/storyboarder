@@ -1,12 +1,12 @@
 require('electron-redux/preload')
 const { ipcRenderer, shell } = require('electron')
-const remote = require('@electron/remote')
+const remote = require('../../shared/remote-compat')
 const jwt = require('jsonwebtoken')
 const path = require('path')
 const fs = require('fs-extra')
 
 const util = require('./js/utils')
-const prefsModule = require('@electron/remote').require('./prefs')
+const prefsModule = require('../../shared/remote-compat').require('./prefs')
 
 const configureStore = require('./js/shared/store/configureStore')
 const store = configureStore()

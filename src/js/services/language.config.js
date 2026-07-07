@@ -1,6 +1,6 @@
 const path = require('path')
 const { app } = process && process.type == 'renderer'
-  ? require('@electron/remote')
+  ? require('../shared/remote-compat')
   : require('electron')
 
 const SettingsService = require('../windows/shot-generator/SettingsService')

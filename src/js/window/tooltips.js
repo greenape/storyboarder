@@ -1,6 +1,6 @@
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 let { acceleratorAsHtml } = require('../utils/index')
-const prefsModule = require('@electron/remote').require('./prefs')
+const prefsModule = require('../shared/remote-compat').require('./prefs')
 const Tooltip = require('tether-tooltip')
 const sfx = require('../wonderunit-sound')
 

@@ -1,6 +1,6 @@
 const Tone = require('tone')
 
-const remote = require('@electron/remote')
+const remote = require('../../shared/remote-compat')
 const prefsModule = remote.require('./prefs')
 const enableHighQualityAudio = prefsModule.getPrefs('melo hi gual')['enableHighQualityAudio']
 

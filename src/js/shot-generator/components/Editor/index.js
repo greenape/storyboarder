@@ -3,7 +3,7 @@ import { Provider, connect} from 'react-redux'
 import path from 'path'
 import electron from 'electron'
 const { ipcRenderer } = electron
-const remote = require('@electron/remote')
+const remote = require('../../../shared/remote-compat')
 import KeyHandler from './../KeyHandler'
 import CameraPanelInspector from './../CameraPanelInspector'
 import CamerasInspector from './../CamerasInspector'

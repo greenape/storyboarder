@@ -1,7 +1,7 @@
 import React, {useCallback, useRef, useEffect} from 'react'
 import {connect} from 'react-redux'
 
-const remote = require('@electron/remote')
+const remote = require('../../../shared/remote-compat')
 const {dialog} = remote
 
 import {

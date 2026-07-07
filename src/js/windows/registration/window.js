@@ -1,6 +1,6 @@
 require('electron-redux/preload')
 const { ipcRenderer } = require('electron')
-const { app } = remote = require('@electron/remote')
+const { app } = remote = require('../../shared/remote-compat')
 const JWT = require('jsonwebtoken')
 const moment = require('moment')
 const { machineIdSync } = require('node-machine-id')

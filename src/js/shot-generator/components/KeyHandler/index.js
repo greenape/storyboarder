@@ -4,7 +4,7 @@ import { connect } from 'react-redux'
 import getGroupAction from '../../../utils/getGroupAction'
 import { createSelector } from 'reselect'
 import { ipcRenderer} from 'electron'
-const remote = require('@electron/remote')
+const remote = require('../../../shared/remote-compat')
 const { dialog } = remote
 import KeyCommandsSingleton from './KeyCommandsSingleton'
 

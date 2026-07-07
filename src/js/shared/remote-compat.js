@@ -20,35 +20,38 @@ const winEmitter = new EventEmitter()
 winEmitter.setMaxListeners(0)
 ipcRenderer.on('remote-compat:win-event', (_e, name) => winEmitter.emit(name))
 
-const WINDOW_METHODS = [
-  'minimize', 'maximize', 'unmaximize', 'isMaximized', 'restore', 'close', 'destroy',
-  'hide', 'show', 'showInactive', 'focus', 'blur', 'isFocused', 'isVisible',
-  'isDestroyed', 'setSize', 'getSize', 'setBounds', 'getBounds', 'setContentSize',
-  'getContentSize', 'setFullScreen', 'isFullScreen', 'setResizable', 'center',
-  'setAlwaysOnTop', 'setTitle', 'getTitle', 'reload', 'setMenuBarVisibility',
-  'setPosition', 'getPosition', 'flashFrame', 'setProgressBar',
-]
+// Well-known props that must NOT resolve to a callable, or a returned/awaited proxy
+// would be mistaken for a thenable (JS reads `.then`) and hang the async chain.
+const NON_METHOD = (prop) =>
+  typeof prop === 'symbol' || prop === 'then' || prop === 'catch' || prop === 'finally' ||
+  prop === 'toJSON' || prop === 'inspect' || prop === 'constructor'
 
-const currentWebContents = {
-  openDevTools: (...a) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', 'openDevTools', a),
-  closeDevTools: (...a) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', 'closeDevTools', a),
-  isDevToolsOpened: (...a) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', 'isDevToolsOpened', a),
-  toggleDevTools: (...a) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', 'toggleDevTools', a),
-}
+// webContents proxy: any method → sync IPC on the sender's webContents.
+const currentWebContents = new Proxy({}, {
+  get (_t, prop) {
+    if (NON_METHOD(prop)) return undefined
+    return (...args) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', prop, args)
+  },
+})
 
-const currentWindow = {
-  __isRemoteCompatWindow: true,
-  webContents: currentWebContents,
-  on: (ev, cb) => (winEmitter.on(ev, cb), currentWindow),
-  addListener: (ev, cb) => (winEmitter.on(ev, cb), currentWindow),
-  once: (ev, cb) => (winEmitter.once(ev, cb), currentWindow),
-  off: (ev, cb) => (winEmitter.off(ev, cb), currentWindow),
-  removeListener: (ev, cb) => (winEmitter.removeListener(ev, cb), currentWindow),
-  removeAllListeners: (ev) => (winEmitter.removeAllListeners(ev), currentWindow),
-}
-for (const m of WINDOW_METHODS) {
-  currentWindow[m] = (...args) => ipcRenderer.sendSync('remote-compat:win-invoke', m, args)
-}
+// getCurrentWindow() proxy: event methods emit locally (fed by forwarded window
+// events); any other method → sync IPC on the sender's own window. Using a Proxy
+// (rather than a fixed method list) keeps the shim robust to any BrowserWindow
+// method a call site uses.
+const currentWindow = new Proxy({}, {
+  get (_t, prop) {
+    switch (prop) {
+      case '__isRemoteCompatWindow': return true
+      case 'webContents': return currentWebContents
+      case 'on': case 'addListener': return (ev, cb) => (winEmitter.on(ev, cb), currentWindow)
+      case 'once': return (ev, cb) => (winEmitter.once(ev, cb), currentWindow)
+      case 'off': case 'removeListener': return (ev, cb) => (winEmitter.removeListener(ev, cb), currentWindow)
+      case 'removeAllListeners': return (ev) => (winEmitter.removeAllListeners(ev), currentWindow)
+    }
+    if (NON_METHOD(prop)) return undefined
+    return (...args) => ipcRenderer.sendSync('remote-compat:win-invoke', prop, args)
+  },
+})
 
 // Dialogs parent to the sender's window in main, so drop any leading window argument.
 const stripWindowArg = (args) =>
@@ -62,13 +65,13 @@ const dialog = {
   showErrorBox: (...a) => ipcRenderer.sendSync('remote-compat:dialog-sync', 'showErrorBox', stripWindowArg(a)),
 }
 
-const app = {
-  getPath: (name) => ipcRenderer.sendSync('remote-compat:app', 'getPath', [name]),
-  getAppPath: () => ipcRenderer.sendSync('remote-compat:app', 'getAppPath', []),
-  getVersion: () => ipcRenderer.sendSync('remote-compat:app', 'getVersion', []),
-  getName: () => ipcRenderer.sendSync('remote-compat:app', 'getName', []),
-  getLocale: () => ipcRenderer.sendSync('remote-compat:app', 'getLocale', []),
-}
+// remote.app.* — every use in the app is a method call (getPath/getAppPath/…).
+const app = new Proxy({}, {
+  get (_t, prop) {
+    if (NON_METHOD(prop)) return undefined
+    return (...args) => ipcRenderer.sendSync('remote-compat:app', prop, args)
+  },
+})
 
 // remote.require('./prefs') → the shared main-process prefs instance, over IPC.
 const prefsProxy = {
@@ -79,9 +82,19 @@ const prefsProxy = {
 }
 
 function remoteRequire (moduleName) {
-  if (moduleName === './prefs') return prefsProxy
+  // Callers reach the shared prefs module both as './prefs' and as an absolute
+  // path (path.join(__dirname, '..', 'prefs')); match on the basename.
+  const base = String(moduleName).replace(/\\/g, '/').split('/').pop().replace(/\.js$/, '')
+  if (base === 'prefs') return prefsProxy
   if (moduleName === 'electron-is-dev') return ipcRenderer.sendSync('remote-compat:is-dev')
   throw new Error(`remote-compat: unsupported remote.require('${moduleName}') — migrate this call to an explicit IPC handler`)
+}
+
+// remote.process — only .mainModule (its .filename, for asar detection) is used.
+const remoteProcess = {
+  get mainModule () {
+    return ipcRenderer.sendSync('remote-compat:main-module')
+  },
 }
 
 module.exports = {
@@ -94,4 +107,5 @@ module.exports = {
   shell,
   clipboard,
   nativeImage,
+  process: remoteProcess,
 }

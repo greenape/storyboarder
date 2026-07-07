@@ -1,6 +1,6 @@
 import React, { useRef, useMemo, useEffect, useState } from 'react'
 import electron, { ipcRenderer } from 'electron'
-const remote = require('@electron/remote')
+const remote = require('../shared/remote-compat')
 import { Math } from 'three'
 const {dialog} = remote
 import ItemList from './ItemList'
