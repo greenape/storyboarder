@@ -78,6 +78,15 @@ function finish() {
   fatals.slice(0, 25).forEach((l) => console.log(`  [fatal] ${l.trim()}`))
 
   const ok = rendered && fatals.length === 0
+  if (!ok) {
+    // Diagnostics for CI: which render markers were seen, and the tail of the app log.
+    console.log('--- render markers ---')
+    for (const re of RENDERED) console.log(`  ${re.test(text) ? 'seen' : 'MISSING'}: ${re}`)
+    const tail = lines.filter((l) => l.trim()).slice(-40)
+    console.log(`--- app log tail (${tail.length} lines) ---`)
+    for (const l of tail) console.log(`  ${l.replace(/\[[0-9;]*m/g, '').trim().slice(0, 200)}`)
+    console.log('--- end tail ---')
+  }
   console.log(ok ? 'SMOKE PASS' : 'SMOKE FAIL')
   process.exit(ok ? 0 : 1)
 }
