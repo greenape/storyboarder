@@ -5,7 +5,7 @@
   "description": "The fastest way to storyboard.",
   "main": "src/js/main.js",
   "engines": {
-    "node": ">=18 <21"
+    "node": ">=22"
   },
   "scripts": {
     "start:xr": "webpack --mode=development --watch --progress --config configs/xr/webpack.config.js",
