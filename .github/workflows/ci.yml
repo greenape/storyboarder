@@ -1,0 +1,55 @@
+name: CI
+
+# The "maintained again" signal: prove that anyone can install, build, and run the
+# unit tests on a clean machine, on every push and PR.
+#
+# Node is pinned via .nvmrc (18). webpack 4 needs NODE_OPTIONS=--openssl-legacy-provider
+# on every OpenSSL-3 Node (17+, including 18); the build/start npm scripts set it via
+# cross-env, so CI needs no special env. Removed by the Phase 1 webpack 5 migration.
+#
+# Scope notes (to be widened as the revival progresses):
+#   * `npm run test:node` runs the pure-Node unit suite. Two legacy filesystem
+#     tests (copy-project, cleanup) are excluded there because they depend on
+#     mock-fs@4.10.1, which does not work on modern Node — tracked for repair.
+#   * The Electron renderer/main tests (`electron-mocha`, part of `npm test`) need a
+#     display and are deferred until the Phase 1 Electron modernization; enable them
+#     here (macOS window server / xvfb on Linux) once they run headless reliably.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & unit test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install server deps
+        run: npm install --legacy-peer-deps
+        working-directory: server
+
+      - name: Install deps
+        run: npm install --legacy-peer-deps
+
+      - name: Build (all webpack targets)
+        run: npm run build
+
+      - name: Unit tests (Node)
+        run: npm run test:node

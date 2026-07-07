@@ -4,6 +4,9 @@
   "version": "3.0.0",
   "description": "The fastest way to storyboard.",
   "main": "src/js/main.js",
+  "engines": {
+    "node": ">=18 <21"
+  },
   "scripts": {
     "start:xr": "webpack --mode=development --watch --progress --config configs/xr/webpack.config.js",
     "start:ar": "webpack --mode=development --watch --progress --config configs/ar/webpack.config.js",
@@ -12,13 +15,15 @@
     "start:language-preferences": "webpack --mode=development --watch --progress --config configs/language-preferences/webpack.config.js",
     "start:print-project": "webpack --mode=development --watch --progress --config configs/print-project/webpack.config.js",
     "start:server": "cd server && npm run start",
-    "start:electron": "cross-env NODE_ENV=development electron .",
-    "start": "npm-run-all --parallel start:*",
+    "start:electron": "cross-env NODE_ENV=development NODE_OPTIONS= electron .",
+    "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider npm-run-all --parallel start:*",
     "dist:mac": "npm run build && electron-builder build -m --arm64 --x64",
     "dist:win": "npm run build && electron-builder build -w",
     "dist:linux": "npm run build && electron-builder build -l",
-    "dist": "npm run build && build -mwl",
+    "dist": "npm run build && electron-builder build -mwl",
     "test": "mocha $(find test -name '*[!renderer].test.js') && electron-mocha --renderer test/*.renderer.test.js test/**/*.renderer.test.js && electron-mocha test/**/*.main.test.js",
+    "test:node": "mocha $(find test -name '*[!renderer].test.js' -not -name 'copy-project.test.js' -not -name 'cleanup.test.js')",
+    "test:node:all": "mocha $(find test -name '*[!renderer].test.js')",
     "clean:fixtures": "git checkout test/fixtures && git clean test/fixtures -f",
     "clean:xr": "trash src/js/xr/dist",
     "clean:ar": "trash src/js/ar/dist",
@@ -34,12 +39,12 @@
     "build:language-preferences": "webpack --mode=production --progress --config configs/language-preferences/webpack.config.js",
     "build:print-project": "webpack --mode=production --progress --config configs/print-project/webpack.config.js",
     "build:server": "cd server && npm run build",
-    "build": "npm-run-all build:*",
+    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider npm-run-all build:*",
     "deploy:prod": "node ./scripts/deploy.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wonderunit/storyboarder.git"
+    "url": "git+https://github.com/greenape/storyboarder.git"
   },
   "keywords": [
     "fountain",
@@ -54,9 +59,16 @@
     "beforeBuild": "scripts/electron-builder-before-build.js",
     "afterSign": "scripts/notarize.js",
     "asar": true,
-    "appId": "com.wonderunit.storyboarder",
+    "appId": "net.nanosheep.storyboarder",
     "buildDependenciesFromSource": true,
     "compression": "maximum",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "greenape",
+        "repo": "storyboarder"
+      }
+    ],
     "files": [
       "!*.md",
       "!DEVELOPERS.md",
@@ -151,6 +163,8 @@
     "@babel/preset-react": "^7.12.1",
     "@babel/register": "^7.12.1",
     "@babel/runtime": "^7.12.1",
+    "@electron/notarize": "^2.5.0",
+    "@electron/osx-sign": "^1.3.1",
     "@tweenjs/tween.js": "^18.5.0",
     "babel-loader": "^8.1.0",
     "babel-plugin-add-module-exports": "^1.0.4",
@@ -163,10 +177,9 @@
     "dotenv": "8.2.0",
     "dotenv-webpack": "^3.0.0",
     "electron": "18.0.2",
+    "electron-builder": "24.13.3",
     "electron-devtools-installer": "3.1.1",
     "electron-mocha": "^11.0.2",
-    "electron-notarize": "^1.1.1",
-    "electron-osx-sign": "^0.4.11",
     "esm": "3.2.25",
     "floss": "^2.2.0",
     "html-webpack-plugin": "^4.3.0",
