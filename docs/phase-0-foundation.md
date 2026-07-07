@@ -8,11 +8,13 @@ CI that proves it, and cutting the cord to Wonder Unit's infrastructure.
 
 ### Reproducible build + Node pin
 - **`.nvmrc`** pins Node **18**; **`package.json` `engines`** enforces `>=18 <21`.
-- Node 18 matters because the build is still **webpack 4**, which fails on Node 17+
-  with `ERR_OSSL_EVP_UNSUPPORTED`. Verified empirically here: on Node 26 a webpack
-  target builds only with `NODE_OPTIONS=--openssl-legacy-provider`; without it it
-  fails `error:0308010C: digital envelope routines::unsupported`. The flag is
-  documented in `DEVELOPERS.md` as the escape hatch until the Phase 1 webpack 5 work.
+- The build is still **webpack 4**, whose md4 hashing fails with
+  `ERR_OSSL_EVP_UNSUPPORTED` (`error:0308010C: digital envelope routines::unsupported`)
+  on every OpenSSL-3 Node — that's Node 17+, **including Node 18**. So `.nvmrc`=18 does
+  *not* dodge it: the `build`/`start` scripts set `NODE_OPTIONS=--openssl-legacy-provider`
+  via `cross-env` (verified: full `npm run build`, all 7 targets, exit 0). This goes
+  away with the Phase 1 webpack 5 migration. (CI caught the original omission — the
+  build failed on `build:xr` before the flag was baked into the scripts.)
 - `npm install --legacy-peer-deps` is the documented install command (peer-dep
   conflicts otherwise). Verified: a clean install resolves the full tree — Electron
   18.0.2, the `github:wonderunit/alchemancy` pin, the `file:` vendored `tether-*`
@@ -22,8 +24,8 @@ CI that proves it, and cutting the cord to Wonder Unit's infrastructure.
 - Runs on every push (`master`, `claude/**`) and PR. Matrix over **macOS + Linux**:
   install (server + root, `--legacy-peer-deps`) → build all webpack targets →
   `npm run test:node`.
-- Node comes from `.nvmrc` via `actions/setup-node`, so CI builds on 18 with no
-  OpenSSL flag.
+- Node comes from `.nvmrc` via `actions/setup-node` (18); the build scripts carry the
+  OpenSSL-legacy flag, so the workflow needs no special env.
 
 ### Test suite made runnable
 - `src/js/services/model-loader.js` read `window.__dirname` at **module load**, so
@@ -57,10 +59,12 @@ CI that proves it, and cutting the cord to Wonder Unit's infrastructure.
 | Windows signing identity (`Wonder Unit, Inc.`) | `package.json` `build.win` | **Left in place** (inert without a cert). Replace with the fork owner's publisher name when Windows signing is set up. |
 
 ## Verified in this pass
-- `npm install --legacy-peer-deps` → full tree, exit 0.
-- `npm run build` toolchain works: the `print-project` and the heavy `shot-generator`
-  (4.04 MiB, incl. the edited `model-loader.js` + `config.js`) targets both emit, exit 0.
+- `npm install --legacy-peer-deps` → full tree, exit 0; `postinstall`
+  (`electron-builder install-app-deps`) resolves the local electron-builder.
+- Full `npm run build` → all 7 webpack targets, exit 0 (with the baked-in OpenSSL flag).
 - `npm run test:node` → 16 passing, 0 failing.
+- CI exercises the same install → build → unit-test path on GitHub's macOS + Linux
+  runners (Node 18).
 
 ## Not verified here (needs a full build host)
 - `dist:mac` packaging + notarization (needs Apple credentials; the toolchain was

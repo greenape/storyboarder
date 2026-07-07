@@ -5,10 +5,13 @@
 Use **Node.js 18** — it's pinned in `.nvmrc` and enforced by the `engines` field in
 `package.json`. If you use `nvm`, run `nvm use`.
 
-Node 18 matters because the build still runs on **webpack 4**, which throws
+The build still runs on **webpack 4**, whose md4 hashing throws
 `ERR_OSSL_EVP_UNSUPPORTED` (`error:0308010C: digital envelope routines::unsupported`)
-on Node 17+ due to the OpenSSL 3 change. If you must run a newer Node before the
-Phase 1 webpack 5 migration, export the legacy provider first:
+on every Node that ships OpenSSL 3 — i.e. Node 17+, **including Node 18**. The `build`
+and `start` scripts therefore set `NODE_OPTIONS=--openssl-legacy-provider` for you
+(via `cross-env`), so `npm run build` / `npm start` just work. This workaround goes
+away with the Phase 1 webpack 5 migration. If you invoke a single `build:*` / `start:*`
+target directly, set the flag yourself:
 
     $ export NODE_OPTIONS=--openssl-legacy-provider
 
