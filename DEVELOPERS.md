@@ -54,9 +54,9 @@ To compile only (Shot Generator, Shot Explorer, and Shot Generator XR)
 
     $ npm run build
 
-To compile and build Storyboarder.app:
+To compile and build Storyboarder.app (`electron-builder` is a dev dependency, so
+`npm install` already provides it — no global install needed):
 
-    $ sudo npm install -g electron-builder
     $ npm run dist:mac    # Mac only
     $ npm run dist:win    # Windows only
     $ npm run dist:linux  # Linux only
