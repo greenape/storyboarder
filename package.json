@@ -120,7 +120,7 @@
       "target": [
         "AppImage"
       ],
-      "icon": "build/icon.icns",
+      "icon": "build/icon.png",
       "synopsis": "The fastest way to storyboard.",
       "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
       "category": "Graphics"
