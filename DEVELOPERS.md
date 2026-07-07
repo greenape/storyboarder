@@ -1,6 +1,6 @@
 # Notes for Developers
 
-Tested with node v6.1.0.
+Tested with Node.js 18 LTS.
 
 ## Developing
 
@@ -141,6 +141,30 @@ Then, publish:
     GH_TOKEN={...} npm run dist:mac -- --publish onTagOrDraft
     GH_TOKEN={...} npm run dist:win -- --publish onTagOrDraft
     GH_TOKEN={...} npm run dist:linux -- --publish onTagOrDraft
+
+### macOS code signing & notarization
+
+`dist:mac` produces a universal (arm64 + x64) build, signs it, then notarizes via
+the `scripts/notarize.js` afterSign hook. Notarization goes through Apple's
+`notarytool` (the old `altool` path was retired by Apple in November 2023), so a
+valid Developer ID certificate must be in your keychain and one of the following
+credential sets must be present (via an `electron-builder.env` file or the shell
+environment):
+
+App Store Connect API key (recommended for CI):
+
+    APPLE_API_KEY=/path/to/AuthKey_XXXXXXXXXX.p8
+    APPLE_API_KEY_ID=XXXXXXXXXX
+    APPLE_API_ISSUER=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+
+…or an Apple ID with an app-specific password (note the now-required Team ID):
+
+    APPLEID=you@example.com
+    APPLEIDPASS=abcd-efgh-ijkl-mnop
+    APPLETEAMID=XXXXXXXXXX
+
+To build without signing/notarizing during development, set
+`CSC_IDENTITY_AUTO_DISCOVERY=false`.
 
 ## Deploying
 
