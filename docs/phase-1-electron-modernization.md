@@ -16,11 +16,36 @@
 >   asserts boards render with no fatal renderer errors. The gate every slice above passed.
 > - ✅ Removed the unused `parcel-bundler`; made `postinstall` tolerant of the optional,
 >   dev-only `fsevents` copies that can't build against Electron 42's V8.
-> - ⏳ **Remaining (this doc's §6 slices 2–6 minus remote):** flip windows to
->   `contextIsolation:true` + `nodeIntegration:false` behind preloads (the large piece —
->   moves `fs`/`path`/`require('electron')` out of ~50 renderer files and bundles the 11
->   raw-`require` 2D HTML entrypoints), and replace the `electron-redux` alpha. These need
->   per-window smoke tests (the current smoke covers the main + welcome windows).
+> - ✅ **contextIsolation: the two inline-script windows flipped** (`loading-status`,
+>   `update`) — each behind a per-window preload (`src/js/preload/*.js`) exposing only what
+>   the page needs via `contextBridge`, `nodeIntegration:false` + `contextIsolation:true`.
+>   Verified with focused `contextBridge` tests (API exposed, `require` undefined in the
+>   renderer) + smoke. These were the **only** two windows flippable without bundling —
+>   they had inline scripts with no module `require`. (PRs #10.)
+> - ⏳ **Remaining (this doc's §6 slices 2–6 minus remote): a whole-app bundling migration,
+>   not a series of window flips.** Concrete inventory taken while flipping the two above
+>   (`src/*.html` × their renderer `require` surface):
+>     - **`xr` / `ar`** (slice 2): their `dist/bundle.js` is a **Node-free web-app** served
+>       over HTTP to a headset (`<script src="bundle.js">`, zero `require('electron')`/`fs`),
+>       *not* a `nodeIntegration` BrowserWindow — so there is effectively nothing to flip.
+>     - **Already-bundled desktop windows** (slices 3–4: `language-preferences`,
+>       `shot-explorer`, `shot-generator`): loaded via `require('./build/*.js')` in the HTML.
+>       Need the HTML `require`→`<script src>` swap **plus** a preload replacing their bundle's
+>       runtime `require('electron')`/`fs`/`path`/`remote-compat`/`ipcRenderer` (shallow but
+>       real — e.g. language-preferences has ~12 sites). Not smoke-covered (niche windows).
+>     - **The raw-`require` 2D windows** (slice 6, largest, LAST): `main-window` (7230 LOC,
+>       61 `require`s, 115 `ipcRenderer` sites), `welcome`, `new`, `keycommand`,
+>       `import-window`, `shot-generator-tutorial`, `preferences`, `registration`, `upload`.
+>       **The 2D app has no bundler at all** (only `server/` webpack builds the shot-generator
+>       bundle), so each requires *introducing* webpack bundling for its whole dep tree **and**
+>       rewriting every `fs`/`path`/`electron`/`child_process`/`remote-compat` leaf behind a
+>       preload — all coupled to `electron-redux/preload` + `configureStore`, so **§5's
+>       electron-redux replacement (slice 5) must land first**. Only `main-window` is
+>       smoke-covered; the rest need a manual/device testing loop (§8).
+>   **Assessment:** the RCE-surface win (the `@electron/remote` removal) is already banked and
+>   merged; the residual contextIsolation work on the 2D layer is defense-in-depth on locally-
+>   loaded content and is a multi-PR bundler migration best driven with the human/device smoke
+>   loop §8 calls for — not blind autonomous flips of un-verifiable niche windows.
 > - **Manual smoke still owed** on non-main windows migrated off remote: Shot Generator /
 >   Shot Explorer / XR / AR, export-web, worksheet import, and the per-window dialogs.
 >
