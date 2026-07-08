@@ -27,6 +27,7 @@ const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
 // Renderer/main failures that mean the app is broken.
 const FATAL = [
   /\bFATAL:/, // Chromium/Electron hard aborts (e.g. sandbox misconfigured — app never launches)
+  /could not be cloned/i, // IPC send/invoke of a non-serialisable arg (e.g. a callback)
   /Cannot find module/i,
   /\b(require|remote|module|process|ipcRenderer|__dirname) is not defined/i,
   /Uncaught (Error|TypeError|ReferenceError)/,

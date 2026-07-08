@@ -26,10 +26,20 @@ const NON_METHOD = (prop) =>
   typeof prop === 'symbol' || prop === 'then' || prop === 'catch' || prop === 'finally' ||
   prop === 'toJSON' || prop === 'inspect' || prop === 'constructor'
 
-// webContents proxy: any method → sync IPC on the sender's webContents.
+// EventEmitter methods take a callback, which can't be sent over IPC ("object could
+// not be cloned"). We can't bridge a renderer callback to a main-process webContents
+// event synchronously (e.g. before-input-event's preventDefault must be called in the
+// main handler), so these are safe no-ops — the corresponding behaviour is handled in
+// the main process instead (see main.js). Everything else → sync IPC on the sender's
+// webContents.
+const EMITTER_METHODS = new Set([
+  'on', 'once', 'addListener', 'prependListener', 'prependOnceListener',
+  'removeListener', 'off', 'removeAllListeners', 'setMaxListeners',
+])
 const currentWebContents = new Proxy({}, {
   get (_t, prop) {
     if (NON_METHOD(prop)) return undefined
+    if (EMITTER_METHODS.has(prop)) return () => currentWebContents
     return (...args) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', prop, args)
   },
 })
@@ -97,11 +107,41 @@ const remoteProcess = {
   },
 }
 
+// remote.BrowserWindow.getAllWindows() — each window is a proxy over a serialisable
+// snapshot: snapshot fields (id/url/focused/destroyed) return synchronously, method
+// calls (close, webContents.undo/redo/copy/paste/send, …) forward to main by id.
+function browserWindowProxy (snap) {
+  const wc = new Proxy({}, {
+    get (_t, prop) {
+      if (prop === 'getURL') return () => snap.url
+      if (NON_METHOD(prop)) return undefined
+      return (...args) => ipcRenderer.send('remote-compat:webcontents-op', snap.id, prop, args)
+    },
+  })
+  return new Proxy({}, {
+    get (_t, prop) {
+      switch (prop) {
+        case 'id': return snap.id
+        case 'webContents': return wc
+        case 'isDestroyed': return () => snap.destroyed
+        case 'isFocused': return () => snap.focused
+      }
+      if (NON_METHOD(prop)) return undefined
+      return (...args) => ipcRenderer.send('remote-compat:window-op', snap.id, prop, args)
+    },
+  })
+}
+
+const BrowserWindow = {
+  getAllWindows: () => (ipcRenderer.sendSync('remote-compat:all-windows') || []).map(browserWindowProxy),
+}
+
 module.exports = {
   getCurrentWindow: () => currentWindow,
   getCurrentWebContents: () => currentWebContents,
   getGlobal: (name) => ipcRenderer.sendSync('remote-compat:get-global', name),
   require: remoteRequire,
+  BrowserWindow,
   dialog,
   app,
   shell,
