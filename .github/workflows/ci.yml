@@ -74,3 +74,12 @@ jobs:
         run: xvfb-run -a npm run test:smoke
         env:
           SMOKE_SETTLE_MS: "45000"
+
+      # Interaction gate: drive the breakdown panel through the real UI over CDP
+      # (Electron's remote-debugging port) and assert it persists to project.json +
+      # the scene file. This is what smoke can't do — it exercises clicks/typing.
+      - name: Drive test — breakdown panel (Linux, xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:drive:breakdown
+        env:
+          SMOKE_SETTLE_MS: "45000"

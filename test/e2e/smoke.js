@@ -6,11 +6,12 @@
 // renderer errors (module-not-found, `require`/`remote` is-not-defined,
 // contextIsolation breakage, uncaught exceptions).
 //
-// This drives the app *bare* (child_process + ELECTRON_ENABLE_LOGGING) rather
-// than via Playwright: Playwright's renderer instrumentation is incompatible with
-// this app's legacy inline-`require()` nodeIntegration windows. Once Phase 1 moves
-// the windows to contextIsolation + preload, a Playwright harness that can also
-// drive the UI becomes viable and can supersede this.
+// This drives the app *bare* (child_process + ELECTRON_ENABLE_LOGGING). Playwright's
+// renderer instrumentation is incompatible with this app's legacy inline-`require()`
+// nodeIntegration windows — but that does NOT mean the UI can't be driven: raw CDP
+// over Electron's --remote-debugging-port works regardless of nodeIntegration, and
+// `test/e2e/drive-breakdown.js` uses it to actually exercise clicks/typing. This
+// smoke stays the fast launch+render gate; the drive tests are the interaction gate.
 //
 // Run: node test/e2e/smoke.js [path/to.storyboarder]   (requires a display)
 
