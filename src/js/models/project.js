@@ -61,6 +61,59 @@ const defaultProject = ({ aspectRatio, fps } = {}) => ({
   schedule: defaultSchedule()
 })
 
+// --- Breakdown vocabularies (Phase 3) ---------------------------------------
+//
+// The controlled project-level lists that scene + shot metadata reference by id:
+// cast members, locations, and the lens kit. Editing is CRUD over
+// project.breakdown[kind]; deletion needs referential cleanup in every scene that
+// references the item, which lives in scene.js (scenes are separate files, so the
+// caller applies it per open scene).
+
+const VOCAB_KINDS = ['cast', 'locations', 'lensKit']
+
+const VOCAB_ID_PREFIX = {
+  cast: 'cast_',
+  locations: 'loc_',
+  lensKit: 'lens_'
+}
+
+const makeVocabId = kind => VOCAB_ID_PREFIX[kind] + util.uidGen(6).toLowerCase()
+
+// Backfill breakdown/schedule on a project that predates them (a project.json
+// written before this phase), so CRUD never dereferences undefined.
+const ensureBreakdown = project => {
+  if (!project.breakdown) project.breakdown = defaultBreakdown()
+  for (const kind of VOCAB_KINDS) {
+    if (!Array.isArray(project.breakdown[kind])) project.breakdown[kind] = []
+  }
+  if (!project.schedule) project.schedule = defaultSchedule()
+  return project
+}
+
+const addVocabItem = (project, kind, fields = {}) => {
+  if (!VOCAB_KINDS.includes(kind)) throw new Error(`unknown vocab kind: ${kind}`)
+  ensureBreakdown(project)
+  const item = { id: makeVocabId(kind), ...fields }
+  project.breakdown[kind].push(item)
+  return item
+}
+
+const renameVocabItem = (project, kind, id, name) => {
+  ensureBreakdown(project)
+  const item = project.breakdown[kind].find(entry => entry.id === id)
+  if (item) item.name = name
+  return item
+}
+
+// Remove a vocab item from the project. Returns the removed id (or null) so the
+// caller can drive scene.cleanupSceneReferences across the open scenes.
+const removeVocabItem = (project, kind, id) => {
+  ensureBreakdown(project)
+  const before = project.breakdown[kind].length
+  project.breakdown[kind] = project.breakdown[kind].filter(entry => entry.id !== id)
+  return project.breakdown[kind].length < before ? id : null
+}
+
 const projectFilePath = projectRoot => path.join(projectRoot, PROJECT_FILENAME)
 
 const projectExists = projectRoot => fs.existsSync(projectFilePath(projectRoot))
@@ -93,6 +146,12 @@ module.exports = {
   defaultSchedule,
   synthesizeProject,
   defaultProject,
+  VOCAB_KINDS,
+  makeVocabId,
+  ensureBreakdown,
+  addVocabItem,
+  renameVocabItem,
+  removeVocabItem,
   projectFilePath,
   projectExists,
   readProject,

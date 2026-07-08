@@ -101,4 +101,48 @@ describe('models/project', () => {
       assert.strictEqual(project.aspectRatio, projectModel.DEFAULT_ASPECT_RATIO)
     })
   })
+
+  describe('breakdown vocabularies (Phase 3)', () => {
+    it('adds items with kind-prefixed unique ids', () => {
+      const project = projectModel.defaultProject()
+      const jane = projectModel.addVocabItem(project, 'cast', { name: 'JANE', role: 'lead' })
+      const kitchen = projectModel.addVocabItem(project, 'locations', { name: 'INT. KITCHEN' })
+      const lens = projectModel.addVocabItem(project, 'lensKit', { name: '35mm' })
+
+      assert.ok(jane.id.startsWith('cast_'))
+      assert.ok(kitchen.id.startsWith('loc_'))
+      assert.ok(lens.id.startsWith('lens_'))
+      assert.strictEqual(jane.role, 'lead', 'extra fields kept')
+      assert.deepStrictEqual(project.breakdown.cast.map(c => c.name), ['JANE'])
+    })
+
+    it('rejects an unknown vocab kind', () => {
+      assert.throws(() => projectModel.addVocabItem(projectModel.defaultProject(), 'props', {}))
+    })
+
+    it('renames an item in place', () => {
+      const project = projectModel.defaultProject()
+      const loc = projectModel.addVocabItem(project, 'locations', { name: 'INT. KITCHEN' })
+      projectModel.renameVocabItem(project, 'locations', loc.id, 'INT. KITCHEN - NIGHT')
+      assert.strictEqual(project.breakdown.locations[0].name, 'INT. KITCHEN - NIGHT')
+    })
+
+    it('removes an item and returns its id (null if absent)', () => {
+      const project = projectModel.defaultProject()
+      const lens = projectModel.addVocabItem(project, 'lensKit', { name: '50mm' })
+      assert.strictEqual(projectModel.removeVocabItem(project, 'lensKit', lens.id), lens.id)
+      assert.strictEqual(project.breakdown.lensKit.length, 0)
+      assert.strictEqual(projectModel.removeVocabItem(project, 'lensKit', 'lens_nope'), null)
+    })
+
+    it('ensureBreakdown backfills a pre-Phase-3 manifest', () => {
+      const legacy = { version: 2, aspectRatio: 2.35, fps: 24, sceneOrder: [] } // no breakdown/schedule
+      projectModel.ensureBreakdown(legacy)
+      assert.deepStrictEqual(legacy.breakdown, { cast: [], locations: [], lensKit: [] })
+      assert.deepStrictEqual(legacy.schedule, { days: [], unscheduled: [] })
+      // and CRUD works on it afterward
+      const item = projectModel.addVocabItem(legacy, 'cast', { name: 'BOB' })
+      assert.strictEqual(legacy.breakdown.cast[0].id, item.id)
+    })
+  })
 })
