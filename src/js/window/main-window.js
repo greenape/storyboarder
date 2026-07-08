@@ -59,6 +59,7 @@ const importerPsd = require('../importers/psd')
 const sceneSettingsView = require('./scene-settings-view')
 
 const boardModel = require('../models/board')
+const shotModel = require('../models/shot')
 const watermarkModel = require('../models/watermark')
 
 const AudioPlayback = require('./audio-playback')
@@ -414,6 +415,21 @@ const load = async (event, args) => {
     }
 
     migrateScene()
+
+    // Phase 2: upgrade the loaded scene to first-class shots (revival-plan §3).
+    // Idempotent — a scene that already carries shots[] is untouched, so shot IDs
+    // stay stable across loads. A freshly-migrated scene is marked dirty so the
+    // derived shots[] + board.shotId persist on the next save (invariant 1:
+    // loading and re-saving a legacy file produces shots[] with no visual change,
+    // since the numbering loop still renders from newShot until PR-C).
+    {
+      const hadShots = Array.isArray(boardData.shots) && boardData.shots.length > 0
+      shotModel.migrateToShots(boardData)
+      if (!hadShots && boardData.shots && boardData.shots.length) {
+        log.info('migrateToShots: derived', boardData.shots.length, 'shots from', boardData.boards.length, 'boards')
+        markBoardFileDirty()
+      }
+    }
 
     await loadBoardUI()
 

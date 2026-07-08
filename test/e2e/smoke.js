@@ -16,11 +16,21 @@
 
 const { spawn } = require('child_process')
 const path = require('path')
+const os = require('os')
+const fs = require('fs-extra')
 
 const appDir = path.resolve(__dirname, '..', '..')
 const electron = require('electron') // resolves to the electron binary path
-const fixture =
+const origFixture =
   process.argv[2] || path.join('test', 'fixtures', 'example', 'example.storyboarder')
+
+// Open a throwaway COPY of the fixture's project folder, never the committed one:
+// the app autosaves (e.g. the Phase 2 shots migration marks the scene dirty on
+// load), so pointing it at the real fixture would rewrite a checked-in file. The
+// copy also lets us assert the migration round-trips to disk (see finish()).
+const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-smoke-'))
+fs.copySync(path.dirname(path.resolve(appDir, origFixture)), workDir)
+const fixture = path.join(workDir, path.basename(origFixture))
 
 const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
 
@@ -79,10 +89,26 @@ function finish() {
   )
   const rendered = RENDERED.some((re) => re.test(text))
 
-  console.log(`fixture: ${fixture}`)
+  // Did the Phase 2 shots migration round-trip to disk? Informational (the
+  // migration itself is unit-tested); confirms load→migrate→autosave doesn't
+  // break, without gating on autosave timing.
+  let shotsOnDisk = 'n/a'
+  try {
+    const saved = fs.readJsonSync(fixture)
+    shotsOnDisk = Array.isArray(saved.shots)
+      ? `yes (${saved.shots.length} shots, shotId on every board: ${saved.boards.every((b) => b.shotId)})`
+      : 'no'
+  } catch {}
+
+  console.log(`fixture: ${origFixture}`)
   console.log(`rendered boards: ${rendered}`)
   console.log(`fatal errors: ${fatals.length}`)
+  console.log(`shots migrated to disk: ${shotsOnDisk}`)
   fatals.slice(0, 25).forEach((l) => console.log(`  [fatal] ${l.trim()}`))
+
+  try {
+    fs.removeSync(workDir)
+  } catch {}
 
   const ok = rendered && fatals.length === 0
   if (!ok) {
