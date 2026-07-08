@@ -3,6 +3,7 @@
 // https://github.com/wulkano/kap/blob/b326a5a/app/src/main/auto-updater.js
 
 const { BrowserWindow, dialog, app } = electron = require('electron')
+const path = require('path')
 const log = require('./shared/storyboarder-electron-log')
 const { autoUpdater } = require('electron-updater')
 
@@ -38,9 +39,10 @@ const init = () => {
         resizable: false,
         backgroundColor: '#E5E5E5',
         webPreferences: {
-          nodeIntegration: true,
+          nodeIntegration: false,
+          contextIsolation: true,
           devTools: true,
-          contextIsolation: false
+          preload: path.join(__dirname, 'preload', 'update.js')
         }
       })
       win.on('closed', () => {

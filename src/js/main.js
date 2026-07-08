@@ -1067,8 +1067,9 @@ let loadStoryboarderWindow = (filename, scriptData, locations, characters, board
     frame: false,
     resizable: isDev ? true : false,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload', 'loading-status.js')
     }
   })
   loadingStatusWindow.loadURL(`file://${__dirname}/../loading-status.html?name=${encodeURIComponent(projectName)}`)

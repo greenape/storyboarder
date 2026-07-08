@@ -22,9 +22,8 @@
     <div class="update-release-notes"></div>
 
     <script>
-      let ipc = require('electron').ipcRenderer
-      
-      ipc.on('progress', (event, progressObj) => {
+      // contextIsolation: no require here — events come from the preload (js/preload/update.js)
+      window.updater.onProgress((progressObj) => {
         let barHtml = document.querySelector('.update-progress_bar')
         barHtml.style.width = `${progressObj.percent}%`
 
@@ -32,7 +31,7 @@
         statusHtml.innerHTML = `${Math.floor(progressObj.percent)}%`
       })
 
-      ipc.on('release-notes', (event, releaseNotes) => {
+      window.updater.onReleaseNotes((releaseNotes) => {
         let statusHtml = document.querySelector('.update-release-notes')
         statusHtml.innerHTML = releaseNotes
       })
