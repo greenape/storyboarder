@@ -60,6 +60,8 @@ const sceneSettingsView = require('./scene-settings-view')
 
 const boardModel = require('../models/board')
 const shotModel = require('../models/shot')
+const sceneModel = require('../models/scene')
+const projectModel = require('../models/project')
 const watermarkModel = require('../models/watermark')
 
 const AudioPlayback = require('./audio-playback')
@@ -259,6 +261,11 @@ let boardSettings
 let currentPath
 let currentScene = 0
 
+// Phase 3: the project.json manifest (breakdown vocabularies + schedule) and the
+// root it lives at — currentPath for a script project, boardPath for a single file.
+let projectData = null
+let projectRoot = null
+
 let boardFileDirty = false
 let boardFileDirtyTimer
 
@@ -387,6 +394,7 @@ const load = async (event, args) => {
       characters = args[3]
       boardSettings = args[4]
       currentPath = args[5]
+      projectRoot = currentPath // the storyboards/ dir, where storyboard.settings lives
 
       await updateSceneFromScript()
       store.dispatch({
@@ -400,6 +408,7 @@ const load = async (event, args) => {
       boardPath = boardFilename.split(path.sep)
       boardPath.pop()
       boardPath = boardPath.join(path.sep)
+      projectRoot = boardPath // a single-file project: the folder holding the .storyboarder
       log.info(' BOARD PATH: ', boardFilename)
       try {
         boardData = JSON.parse(fs.readFileSync(boardFilename))
@@ -430,6 +439,16 @@ const load = async (event, args) => {
         markBoardFileDirty()
       }
     }
+
+    // Phase 3: give the scene its breakdown metadata (id + location/cast/etc.,
+    // idempotent) and mark dirty so it persists; then load or create the
+    // project.json manifest (breakdown vocabularies) at the project root.
+    {
+      const hadSceneMeta = Boolean(boardData.id && boardData.metadata)
+      sceneModel.migrateSceneMetadata(boardData)
+      if (!hadSceneMeta) markBoardFileDirty()
+    }
+    loadOrCreateProjectManifest()
 
     await loadBoardUI()
 
@@ -2421,6 +2440,42 @@ let markBoardFileDirty = () => {
   boardFileDirty = true
   clearTimeout(boardFileDirtyTimer)
   boardFileDirtyTimer = setTimeout(saveBoardFile, 5000)
+}
+
+// Phase 3: load the project.json manifest at projectRoot, or synthesize + write
+// one if it's absent. Holds the breakdown vocabularies (cast/locations/lensKit)
+// that scene + shot metadata reference. A newly-created manifest seeds sceneOrder
+// with the current scene; for a multi-scene project that's provisional (nothing
+// reads sceneOrder until Phase 4's schedule), while the breakdown — the part
+// Phase 3 uses — persists correctly.
+const loadOrCreateProjectManifest = () => {
+  if (!projectRoot) return
+  try {
+    projectData = projectModel.readProject(projectRoot)
+    if (projectData) {
+      projectModel.ensureBreakdown(projectData) // backfill a pre-Phase-3 manifest
+    } else {
+      projectData = projectModel.synthesizeProject(
+        { aspectRatio: boardData.aspectRatio, fps: boardData.fps },
+        [{ id: boardData.id, aspectRatio: boardData.aspectRatio, fps: boardData.fps }]
+      )
+      projectModel.writeProject(projectRoot, projectData)
+      log.info('created project manifest at', projectRoot)
+    }
+  } catch (err) {
+    log.error('project manifest load/create failed:', err)
+    projectData = projectData || projectModel.defaultProject({ aspectRatio: boardData.aspectRatio, fps: boardData.fps })
+  }
+}
+
+// Persist the in-memory project.json (breakdown edits from the breakdown panel).
+const saveProjectFile = () => {
+  if (!projectRoot || !projectData) return
+  try {
+    projectModel.writeProject(projectRoot, projectData)
+  } catch (err) {
+    log.error('could not save project manifest:', err)
+  }
 }
 
 let saveBoardFile = (opt = { force: false }) => {
