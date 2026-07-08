@@ -112,6 +112,39 @@ describe('models/schedule', () => {
     })
   })
 
+  describe('groupByLocation (auto-suggest)', () => {
+    it('makes one day per location, shots in story order', () => {
+      const shots = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]
+      const locations = { a: 'KITCHEN', b: 'STREET', c: 'KITCHEN', d: 'STREET' }
+      const s = scheduleModel.groupByLocation(shots, id => locations[id])
+      assert.deepStrictEqual(s.days.map(d => d.label), ['KITCHEN', 'STREET'], 'first-appearance order')
+      assert.deepStrictEqual(s.days[0].shotIds, ['a', 'c'])
+      assert.deepStrictEqual(s.days[1].shotIds, ['b', 'd'])
+      assert.deepStrictEqual(s.unscheduled, [])
+    })
+
+    it('buckets shots with no location under "Unassigned"', () => {
+      const s = scheduleModel.groupByLocation([{ id: 'a' }, { id: 'b' }], () => null)
+      assert.deepStrictEqual(s.days.map(d => d.label), ['Unassigned'])
+      assert.deepStrictEqual(s.days[0].shotIds, ['a', 'b'])
+    })
+  })
+
+  describe('scheduleToCsv', () => {
+    it('emits a header, day rows, then unscheduled, with escaping', () => {
+      const s = scheduleModel.emptySchedule()
+      const day = scheduleModel.addDay(s, 'Day 1')
+      scheduleModel.moveShotToDay(s, 'a', day.id)
+      s.unscheduled = ['b']
+      const rows = { a: { shot: '1A', location: 'INT. KITCHEN, NIGHT', cast: 'JANE' }, b: { shot: '2A', location: 'STREET', cast: '' } }
+      const csv = scheduleModel.scheduleToCsv(s, id => rows[id])
+      const lines = csv.trim().split('\n')
+      assert.strictEqual(lines[0], 'Day,Shot,Location,Cast')
+      assert.strictEqual(lines[1], 'Day 1,1A,"INT. KITCHEN, NIGHT",JANE', 'comma-containing cell quoted')
+      assert.strictEqual(lines[2], '(unscheduled),2A,STREET,')
+    })
+  })
+
   describe('acceptance invariants', () => {
     it('scheduling never mutates sceneOrder or the in-scene shot order', () => {
       // a scene with three shots, and a project referencing it

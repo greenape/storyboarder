@@ -127,6 +127,43 @@ const reconcileSchedule = (schedule, allShotIds) => {
   return schedule
 }
 
+// Auto-suggest (rules-based, not AI): one day per distinct location, in
+// first-appearance order, each holding that location's shots in story order — the
+// classic stripboard "group by location" starting point the user then hand-tunes.
+// `shots` is [{ id }] in story order; `locationOf(shotId)` → a location name (or
+// falsy). Returns a fresh schedule; unscheduled stays empty.
+const groupByLocation = (shots, locationOf) => {
+  const schedule = emptySchedule()
+  const dayByLocation = new Map()
+  for (const shot of shots) {
+    const key = locationOf(shot.id) || 'Unassigned'
+    if (!dayByLocation.has(key)) dayByLocation.set(key, addDay(schedule, key))
+    dayByLocation.get(key).shotIds.push(shot.id)
+  }
+  return schedule
+}
+
+const csvCell = value => {
+  const str = value == null ? '' : String(value)
+  return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str
+}
+
+// Export the schedule as CSV (Day, Shot, Location, Cast). `rowFor(shotId)` →
+// { shot, location, cast } strings. Days first (shoot order), then an
+// "(unscheduled)" tail. Pure.
+const scheduleToCsv = (schedule, rowFor) => {
+  const lines = [['Day', 'Shot', 'Location', 'Cast'].map(csvCell).join(',')]
+  const emit = (dayLabel, shotId) => {
+    const row = rowFor(shotId) || {}
+    lines.push([dayLabel, row.shot, row.location, row.cast].map(csvCell).join(','))
+  }
+  for (const day of (schedule.days || [])) {
+    for (const shotId of day.shotIds) emit(day.label, shotId)
+  }
+  for (const shotId of (schedule.unscheduled || [])) emit('(unscheduled)', shotId)
+  return lines.join('\n') + '\n'
+}
+
 module.exports = {
   DAY_ID_PREFIX,
   makeDayId,
@@ -140,5 +177,7 @@ module.exports = {
   moveShotToUnscheduled,
   scheduledShotIds,
   allScheduleShotIds,
-  reconcileSchedule
+  reconcileSchedule,
+  groupByLocation,
+  scheduleToCsv
 }
