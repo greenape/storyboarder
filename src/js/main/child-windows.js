@@ -16,6 +16,18 @@ let importWindow = null
 
 const pageUrl = (file) => `file://${path.join(app.getAppPath(), 'src', file)}`
 
+// Suppress app-menu accelerators while a form window has focus, so a plain key
+// (e.g. 'b') types instead of triggering a tool. This is the surviving half of these
+// windows' old renderer before-input-event handlers — webContents.on is a no-op in the
+// remote-compat shim, and before-input-event must be handled here in main anyway
+// (its setIgnoreMenuShortcuts is synchronous). Exported so registration/main.js reuses it.
+function guardFormMenuShortcuts (win) {
+  win.webContents.on('before-input-event', (_event, input) => {
+    if (win.isDestroyed()) return
+    win.webContents.setIgnoreMenuShortcuts(!input.control && !input.meta)
+  })
+}
+
 function install () {
   // showSignInWindow() in main-window.js
   ipcMain.on('child-window:open-export-web', (event) => {
@@ -30,6 +42,7 @@ function install () {
         nodeIntegration: true, contextIsolation: false,
       },
     })
+    guardFormMenuShortcuts(exportWebWindow)
     exportWebWindow.loadURL(pageUrl('upload.html'))
     exportWebWindow.once('ready-to-show', () => exportWebWindow.show())
     exportWebWindow.on('hide', () => {
@@ -48,6 +61,7 @@ function install () {
         resizable: true, frame: false, modal: true,
         webPreferences: { nodeIntegration: true, contextIsolation: false },
       })
+      guardFormMenuShortcuts(importWindow)
       importWindow.loadURL(pageUrl('import-window.html'))
       importWindow.on('closed', () => { importWindow = null })
     } else if (!importWindow.isVisible()) {
@@ -57,4 +71,4 @@ function install () {
   })
 }
 
-module.exports = { install }
+module.exports = { install, guardFormMenuShortcuts }

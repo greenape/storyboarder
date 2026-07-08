@@ -43,6 +43,7 @@ const show = () => {
   win.once('closed', () => {
     win = null
   })
+  require('../../main/child-windows').guardFormMenuShortcuts(win)
   win.loadURL(`file://${__dirname}/../../../registration.html`)
   win.once('ready-to-show', () => {
     reveal()
