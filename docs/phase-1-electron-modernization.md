@@ -23,6 +23,17 @@
 >   per-window smoke tests (the current smoke covers the main + welcome windows).
 > - **Manual smoke still owed** on non-main windows migrated off remote: Shot Generator /
 >   Shot Explorer / XR / AR, export-web, worksheet import, and the per-window dialogs.
+>
+> **remote-compat audit — fixed vs deferred.** A full audit of the shim's interaction
+> paths (the smoke only covers the main window's load+render) found and fixed the crashes:
+> `getParentWindow()`/`getChildWindows()` returning undefined (worksheet import; main-window
+> focus with a child open), `devToolsWebContents.executeJavaScript` (copy/paste in DevTools),
+> and dialogs called with a literal `null` window arg (shot-generator delete confirmations,
+> save-dialog defaultPath). **Deferred (silent-break, not crash):** `webContents.on(...)` is
+> a no-op in the shim, so the per-window `before-input-event` menu-shortcut gating in the
+> registration / upload / worksheet-import forms is lost (menu accelerators can fire while
+> typing there), as is Shot Explorer's `will-prevent-unload` `isBoardShown` reset. Fix by
+> porting those callback bodies into main (like `main.js`'s main-window handler).
 
 ## 1. The two tracks (important framing)
 
