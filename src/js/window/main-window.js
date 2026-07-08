@@ -2439,6 +2439,12 @@ let saveBoardFile = (opt = { force: false }) => {
     if (opt.force || prefsModule.getPrefs()['enableAutoSave']) {
 
       try {
+        // Phase 2: keep shots[] in sync with the boards before persisting.
+        // newShot stays the authoritative boundary source (the edit paths mutate
+        // it); reconcileShots re-derives shots[] from it while preserving stable
+        // shot IDs + breakdown metadata, so a scene's shots[] never goes stale.
+        shotModel.reconcileShots(boardData)
+
         // save to backup file
         let backupFilePath = boardFilename + '.backup-' + Date.now()
         fs.writeFileSync(backupFilePath, JSON.stringify(boardData, null, 2))
