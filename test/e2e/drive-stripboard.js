@@ -129,6 +129,19 @@ async function main() {
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k)
   if (failed.length) return fail(`persistence checks failed: ${failed.join(', ')}`)
 
+  // auto-group by location, then export CSV (the example has no locations set, so it
+  // groups into a single "Unassigned" day holding every shot)
+  await cdp.evaluate(`document.querySelector('#stripboard-group-location').click()`)
+  const groupedDays = await cdp.evaluate(`document.querySelectorAll('#stripboard-days .stripboard-day').length`)
+  await cdp.evaluate(`document.querySelector('#stripboard-export-csv').click()`)
+  await sleep(1500)
+
+  const csvPath = path.join(path.dirname(fixture), 'schedule.csv')
+  const csvOk = fs.existsSync(csvPath) && fs.readFileSync(csvPath, 'utf8').startsWith('Day,Shot,Location,Cast')
+  console.log('group + export:', JSON.stringify({ groupedDays, csvOk }))
+  if (groupedDays < 1) return fail('group by location produced no days')
+  if (!csvOk) return fail('schedule.csv not written or has a bad header')
+
   clearTimeout(watchdog)
   pass()
 }

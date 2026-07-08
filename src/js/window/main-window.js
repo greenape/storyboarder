@@ -3942,6 +3942,14 @@ const dayIdForShot = (schedule, shotId) => {
   return day ? day.id : ''
 }
 
+// Resolve a shot's breakdown summary (location/lens/cast names) via its first board.
+const shotBreakdownSummary = (shotId) => {
+  const shot = (boardData.shots || []).find(s => s.id === shotId)
+  if (!shot) return null
+  const firstBoard = boardData.boards.find(b => b.uid === shot.boardUids[0])
+  return firstBoard ? sceneModel.breakdownSummaryForBoard(boardData, projectData, firstBoard) : null
+}
+
 const renderStripboard = () => {
   const shotListEl = document.querySelector('#stripboard-shot-list')
   const daysEl = document.querySelector('#stripboard-days')
@@ -4062,6 +4070,43 @@ const setupStripboard = () => {
     scheduleModel.removeDay(projectData.schedule, btn.dataset.dayId)
     saveProjectFile()
     renderStripboard()
+  })
+
+  // auto-suggest: one day per location
+  const groupBtn = document.querySelector('#stripboard-group-location')
+  groupBtn && groupBtn.addEventListener('click', () => {
+    if (!projectData || !boardData) return
+    const locationOf = (shotId) => {
+      const summary = shotBreakdownSummary(shotId)
+      return summary && summary.location
+    }
+    projectData.schedule = scheduleModel.groupByLocation(boardData.shots || [], locationOf)
+    saveProjectFile()
+    renderStripboard()
+  })
+
+  // export the schedule as CSV beside the project
+  const exportBtn = document.querySelector('#stripboard-export-csv')
+  exportBtn && exportBtn.addEventListener('click', () => {
+    if (!projectData || !projectRoot) return
+    const labelById = {}
+    for (const shot of (boardData.shots || [])) labelById[shot.id] = shotDisplayLabel(shot)
+    const rowFor = (shotId) => {
+      const summary = shotBreakdownSummary(shotId)
+      return {
+        shot: labelById[shotId] || shotId,
+        location: summary && summary.location ? summary.location : '',
+        cast: summary && summary.cast ? summary.cast.join('; ') : ''
+      }
+    }
+    const csv = scheduleModel.scheduleToCsv(projectData.schedule, rowFor)
+    try {
+      const csvPath = path.join(projectRoot, 'schedule.csv')
+      fs.writeFileSync(csvPath, csv)
+      log.info('exported schedule CSV to', csvPath)
+    } catch (err) {
+      log.error('schedule CSV export failed:', err)
+    }
   })
 }
 
