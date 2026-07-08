@@ -89,11 +89,51 @@ const cleanupSceneReferences = (boardData, kind, id) => {
   return boardData
 }
 
+// Resolve a board's breakdown to display NAMES (not ids) via the project vocab,
+// with scene inheritance for location. Returns { location, lens, cast: [] } (each
+// null/empty when unset), or null when there's nothing to show or no project.
+// Pure — used by the panel and the exporters.
+const breakdownSummaryForBoard = (boardData, project, board) => {
+  if (!boardData || !project || !project.breakdown) return null
+
+  const nameById = (kind, id) => {
+    if (!id) return null
+    const list = project.breakdown[kind] || []
+    const item = list.find(entry => entry.id === id)
+    return item ? item.name : null
+  }
+
+  const shot = board && board.shotId && Array.isArray(boardData.shots)
+    ? boardData.shots.find(s => s.id === board.shotId)
+    : null
+
+  const location = nameById('locations', resolveShotLocationId(boardData, shot || {}))
+  const lens = shot && shot.metadata ? nameById('lensKit', shot.metadata.lensId) : null
+  const castIds = (boardData.metadata && boardData.metadata.castIds) || []
+  const cast = castIds.map(id => nameById('cast', id)).filter(Boolean)
+
+  if (!location && !lens && !cast.length) return null
+  return { location, lens, cast }
+}
+
+// A one-line "Location · Lens · Cast" display string for a board, or null.
+const breakdownTextForBoard = (boardData, project, board) => {
+  const summary = breakdownSummaryForBoard(boardData, project, board)
+  if (!summary) return null
+  const parts = []
+  if (summary.location) parts.push(summary.location)
+  if (summary.lens) parts.push(summary.lens)
+  if (summary.cast.length) parts.push(summary.cast.join(', '))
+  return parts.length ? parts.join(' · ') : null
+}
+
 module.exports = {
   sceneDuration,
   defaultSceneMetadata,
   migrateSceneMetadata,
   resolveShotLocationId,
   resolveShotMetadata,
-  cleanupSceneReferences
+  cleanupSceneReferences,
+  breakdownSummaryForBoard,
+  breakdownTextForBoard
 }

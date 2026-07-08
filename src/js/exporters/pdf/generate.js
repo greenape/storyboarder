@@ -18,8 +18,10 @@ const {
 } = require('../../models/board')
 
 const {
-  sceneDuration
+  sceneDuration,
+  breakdownTextForBoard
 } = require('../../models/scene')
+const projectModel = require('../../models/project')
 
 const fontPath = path.join('.', 'src', 'fonts')
 const THIN = path.join(fontPath, 'thicccboi', 'THICCCBOI-Thin.woff2')
@@ -215,7 +217,7 @@ const drawImageOrPlaceholder = (doc, { filepath, rect }, cfg) => {
 }
 
 // Place Text Right
-const drawBoardRow = (doc, { rect, scene, board, imagesPath }, cfg) => {
+const drawBoardRow = (doc, { rect, scene, board, manifest, imagesPath }, cfg) => {
   let imageBorderSize = 1
   let borderLineWidth = 0.1
 
@@ -314,6 +316,12 @@ const drawBoardRow = (doc, { rect, scene, board, imagesPath }, cfg) => {
     ),
 
     ...(
+      manifest && breakdownTextForBoard(scene, manifest, board)
+        ? [{ text: breakdownTextForBoard(scene, manifest, board), font: THIN, align: 'left' }]
+        : []
+    ),
+
+    ...(
       cfg.boardTimeDisplay == 'duration'
         ? [{ text: formatMsecs(boardDuration(scene, board)), font: THIN, align: 'right', fontSize: cfg.boardTextSize - 1 }]
         : cfg.boardTimeDisplay == 'sceneTime'
@@ -397,7 +405,7 @@ const drawBoardRow = (doc, { rect, scene, board, imagesPath }, cfg) => {
 }
 
 // Place Text Below
-const drawBoardColumn = (doc, { rect, container, scene, board, imagesPath }, cfg) => {
+const drawBoardColumn = (doc, { rect, container, scene, board, manifest, imagesPath }, cfg) => {
   /*
   insetUpperText: true | false,
   boardBorder: true | false
@@ -531,10 +539,12 @@ const drawBoardColumn = (doc, { rect, container, scene, board, imagesPath }, cfg
   doc
     .save()
 
+  const breakdownText = manifest && breakdownTextForBoard(scene, manifest, board)
   let entries = [
     cfg.enableDialogue && board.dialogue && { text: board.dialogue, font: BOLD },
     cfg.enableAction && board.action && { text: board.action, font: REGULAR },
-    cfg.enableNotes && board.notes && { text: board.notes, font: THIN }
+    cfg.enableNotes && board.notes && { text: board.notes, font: THIN },
+    breakdownText && { text: breakdownText, font: THIN }
   ]
 
   if (localCfg.singleMultiLineTextField) {
@@ -708,6 +718,12 @@ function generate ({ project }, cfg) {
 
   let pages = groupByPage(project.scenes, gridDim[0] * gridDim[1])
 
+  // Phase 3: the breakdown vocabularies live in project.json beside the scenes;
+  // read it once so each board can show its location / lens / cast in the export.
+  const breakdownManifest = (project.scenes && project.scenes.length)
+    ? projectModel.findAndReadProject(project.scenes[0].storyboarderFilePath)
+    : null
+
   let start = cfg.pages[0]
   let end = cfg.pages[1] + 1
 
@@ -831,6 +847,7 @@ function generate ({ project }, cfg) {
           container: template,
           board,
           scene: pageData.scene.data,
+          manifest: breakdownManifest,
           imagesPath,
           direction
         },
