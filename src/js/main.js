@@ -100,6 +100,7 @@ let welcomeWindow
 let newWindow
 
 let mainWindow
+let mainWindowTextInputMode = false
 let sketchWindow
 let keyCommandWindow
 
@@ -1044,6 +1045,19 @@ let loadStoryboarderWindow = (filename, scriptData, locations, characters, board
     }
   })
 
+  // Suppress menu-accelerator shortcuts while the renderer is in text-input mode, so
+  // typing a plain letter (e.g. 'b') doesn't also trigger a tool. This is the surviving
+  // half of the renderer's old `before-input-event` handler (main-window.js); the
+  // command interception itself now comes straight from the menu accelerators. It must
+  // live here in main — before-input-event's setIgnoreMenuShortcuts/preventDefault are
+  // synchronous and can't be bridged to the renderer over IPC (that's the
+  // @electron/remote behaviour we removed).
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (mainWindow.isDestroyed()) return
+    const typing = mainWindowTextInputMode && !(input.control || input.meta)
+    mainWindow.webContents.setIgnoreMenuShortcuts(typing)
+  })
+
   let projectName = path.basename(filename, path.extname(filename))
   loadingStatusWindow = new BrowserWindow({
     width: 450,
@@ -1427,6 +1441,7 @@ ipcMain.on('test', (event, arg)=> {
 })
 
 ipcMain.on('textInputMode', (event, arg)=> {
+  mainWindowTextInputMode = arg
   mainWindow.webContents.send('textInputMode', arg)
 })
 

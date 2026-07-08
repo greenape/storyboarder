@@ -63,6 +63,32 @@ function install () {
     }
   })
 
+  // remote.BrowserWindow.getAllWindows() — a serialisable snapshot of every window
+  // (id + url + focused/destroyed), which the shim wraps in per-window proxies.
+  ipcMain.on('remote-compat:all-windows', (event) => {
+    try {
+      event.returnValue = BrowserWindow.getAllWindows().map((w) => {
+        let url = ''
+        try { url = w.webContents ? w.webContents.getURL() : '' } catch (_e) { url = '' }
+        return { id: w.id, url, focused: !w.isDestroyed() && w.isFocused(), destroyed: w.isDestroyed() }
+      })
+    } catch (_e) {
+      event.returnValue = []
+    }
+  })
+
+  // Method call on a specific window by id (close/hide/…) — fire-and-forget.
+  ipcMain.on('remote-compat:window-op', (_event, id, method, args) => {
+    const w = BrowserWindow.fromId(id)
+    try { if (w && !w.isDestroyed()) w[method](...(args || [])) } catch (_e) { /* ignore */ }
+  })
+
+  // webContents call on a specific window by id (undo/redo/copy/paste/send/…).
+  ipcMain.on('remote-compat:webcontents-op', (_event, id, method, args) => {
+    const w = BrowserWindow.fromId(id)
+    try { if (w && !w.isDestroyed() && w.webContents) w.webContents[method](...(args || [])) } catch (_e) { /* ignore */ }
+  })
+
   // Synchronous global read (remote.getGlobal). Serializable values only.
   ipcMain.on('remote-compat:get-global', (event, name) => {
     const value = global[name]
