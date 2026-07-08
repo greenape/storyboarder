@@ -63,18 +63,23 @@ function install () {
     }
   })
 
-  // remote.BrowserWindow.getAllWindows() — a serialisable snapshot of every window
-  // (id + url + focused/destroyed), which the shim wraps in per-window proxies.
+  // BrowserWindow-returning APIs (getAllWindows/getParentWindow/getChildWindows) can't
+  // send real window objects over IPC, so they return serialisable snapshots that the
+  // shim wraps in per-window proxies (id + url + focused/destroyed).
   ipcMain.on('remote-compat:all-windows', (event) => {
+    try { event.returnValue = BrowserWindow.getAllWindows().map(windowSnapshot) } catch (_e) { event.returnValue = [] }
+  })
+  ipcMain.on('remote-compat:parent-window', (event) => {
     try {
-      event.returnValue = BrowserWindow.getAllWindows().map((w) => {
-        let url = ''
-        try { url = w.webContents ? w.webContents.getURL() : '' } catch (_e) { url = '' }
-        return { id: w.id, url, focused: !w.isDestroyed() && w.isFocused(), destroyed: w.isDestroyed() }
-      })
-    } catch (_e) {
-      event.returnValue = []
-    }
+      const p = BrowserWindow.fromWebContents(event.sender)?.getParentWindow()
+      event.returnValue = p ? windowSnapshot(p) : null
+    } catch (_e) { event.returnValue = null }
+  })
+  ipcMain.on('remote-compat:child-windows', (event) => {
+    try {
+      const kids = BrowserWindow.fromWebContents(event.sender)?.getChildWindows() || []
+      event.returnValue = kids.map(windowSnapshot)
+    } catch (_e) { event.returnValue = [] }
   })
 
   // Method call on a specific window by id (close/hide/…) — fire-and-forget.
@@ -87,6 +92,12 @@ function install () {
   ipcMain.on('remote-compat:webcontents-op', (_event, id, method, args) => {
     const w = BrowserWindow.fromId(id)
     try { if (w && !w.isDestroyed() && w.webContents) w.webContents[method](...(args || [])) } catch (_e) { /* ignore */ }
+  })
+
+  // remote.getCurrentWindow().webContents.devToolsWebContents.executeJavaScript(...)
+  // (copy/paste while DevTools has focus) — fire-and-forget on the sender's devtools.
+  ipcMain.on('remote-compat:devtools-exec', (event, code) => {
+    try { event.sender.devToolsWebContents?.executeJavaScript(code) } catch (_e) { /* ignore */ }
   })
 
   // Synchronous global read (remote.getGlobal). Serializable values only.
@@ -140,6 +151,12 @@ function install () {
     try { prefs.savePrefs() } catch (_e) { /* ignore */ }
     event.returnValue = true
   })
+}
+
+function windowSnapshot (w) {
+  let url = ''
+  try { url = w.webContents ? w.webContents.getURL() : '' } catch (_e) { url = '' }
+  return { id: w.id, url, focused: !w.isDestroyed() && w.isFocused(), destroyed: w.isDestroyed() }
 }
 
 function isSerializable (value) {

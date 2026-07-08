@@ -36,9 +36,15 @@ const EMITTER_METHODS = new Set([
   'on', 'once', 'addListener', 'prependListener', 'prependOnceListener',
   'removeListener', 'off', 'removeAllListeners', 'setMaxListeners',
 ])
+// devToolsWebContents is a webContents object (not serialisable); only
+// executeJavaScript is used (copy/paste while DevTools is focused) — forward it to main.
+const devToolsWebContents = {
+  executeJavaScript: (code) => ipcRenderer.send('remote-compat:devtools-exec', code),
+}
 const currentWebContents = new Proxy({}, {
   get (_t, prop) {
     if (NON_METHOD(prop)) return undefined
+    if (prop === 'devToolsWebContents') return devToolsWebContents
     if (EMITTER_METHODS.has(prop)) return () => currentWebContents
     return (...args) => ipcRenderer.sendSync('remote-compat:webcontents-invoke', prop, args)
   },
@@ -57,15 +63,25 @@ const currentWindow = new Proxy({}, {
       case 'once': return (ev, cb) => (winEmitter.once(ev, cb), currentWindow)
       case 'off': case 'removeListener': return (ev, cb) => (winEmitter.removeListener(ev, cb), currentWindow)
       case 'removeAllListeners': return (ev) => (winEmitter.removeAllListeners(ev), currentWindow)
+      // BrowserWindow-returning methods → id-snapshot proxies (like getAllWindows()),
+      // since a real BrowserWindow can't come back over IPC.
+      case 'getParentWindow': return () => {
+        const s = ipcRenderer.sendSync('remote-compat:parent-window')
+        return s ? browserWindowProxy(s) : null
+      }
+      case 'getChildWindows': return () =>
+        (ipcRenderer.sendSync('remote-compat:child-windows') || []).map(browserWindowProxy)
     }
     if (NON_METHOD(prop)) return undefined
     return (...args) => ipcRenderer.sendSync('remote-compat:win-invoke', prop, args)
   },
 })
 
-// Dialogs parent to the sender's window in main, so drop any leading window argument.
+// Dialogs parent to the sender's window in main, so drop a leading window argument —
+// our window proxy, or a literal null/undefined (old remote.dialog accepted null for an
+// app-modal dialog; without stripping it, main's prepended window shifts the options).
 const stripWindowArg = (args) =>
-  args.length && args[0] && args[0].__isRemoteCompatWindow ? args.slice(1) : args
+  args.length && (args[0] == null || args[0].__isRemoteCompatWindow) ? args.slice(1) : args
 
 const dialog = {
   showOpenDialog: (...a) => ipcRenderer.invoke('remote-compat:dialog', 'showOpenDialog', stripWindowArg(a)),
