@@ -9,6 +9,10 @@
 // the DOM updated AND the values persisted to project.json + the scene file with
 // referential integrity (the scene/shot metadata id resolves to the project vocab).
 //
+// Robustness: every CDP await is bounded and a global watchdog force-exits, so a
+// headless-runner hiccup fails fast instead of hanging the CI job. Modern Chromium
+// rejects the CDP WebSocket upgrade unless --remote-allow-origins is set.
+//
 // Run: node test/e2e/drive-breakdown.js   (requires a display; uses a temp copy)
 
 const { spawn } = require('child_process')
@@ -21,34 +25,46 @@ const electron = require('electron')
 const PORT = Number(process.env.DRIVE_PORT) || 9229
 const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
 
+// global WebSocket is stable on Node 22.4+ (what .nvmrc pins); fall back to the ws
+// package on any older/quirky runtime. Both support the addEventListener API used below.
+const WS = typeof WebSocket !== 'undefined' ? WebSocket : require('ws')
+
 // throwaway copy so autosave writes to a temp project, never a committed fixture
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-drive-'))
 fs.copySync(path.join(appDir, 'test', 'fixtures', 'example'), path.join(workDir, 'example'))
 const fixture = path.join(workDir, 'example', 'example.storyboarder')
 
-// global WebSocket is stable on Node 22.4+ (what .nvmrc pins); fall back to the ws
-// package on any older/quirky runtime. Both support the addEventListener API used below.
-const WS = typeof WebSocket !== 'undefined' ? WebSocket : require('ws')
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-const fail = (msg) => { console.log('DRIVE FAIL:', msg); cleanup(); process.exit(1) }
+const withTimeout = (promise, ms, label) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout: ${label} after ${ms}ms`)), ms)),
+  ])
+
 let child
+let done = false
 function cleanup() {
   try { child && child.kill('SIGKILL') } catch {}
   try { fs.removeSync(workDir) } catch {}
 }
+const fail = (msg) => { if (done) return; done = true; console.log('DRIVE FAIL:', msg); cleanup(); process.exit(1) }
+const pass = () => { if (done) return; done = true; console.log('DRIVE PASS'); cleanup(); process.exit(0) }
+
+// hard backstop: nothing below may hang the CI job
+const watchdog = setTimeout(() => fail('watchdog: drive test exceeded max runtime'), SETTLE_MS + 120000)
+watchdog.unref?.()
 
 async function findMainTarget() {
   for (let i = 0; i < 80; i++) {
     try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/json/list`)
+      const res = await withTimeout(fetch(`http://127.0.0.1:${PORT}/json/list`), 4000, 'json/list')
       const targets = await res.json()
       const main = targets.find((t) => t.type === 'page' && /main-window\.html/.test(t.url))
       if (main && main.webSocketDebuggerUrl) return main
     } catch {}
     await sleep(500)
   }
-  throw new Error('main-window target never appeared')
+  throw new Error('main-window CDP target never appeared')
 }
 
 function connect(wsUrl) {
@@ -56,16 +72,24 @@ function connect(wsUrl) {
   let nextId = 1
   const pending = new Map()
   ws.addEventListener('message', (ev) => {
-    const msg = JSON.parse(ev.data)
+    const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString())
     if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id) }
   })
-  const send = (method, params = {}) => new Promise((resolve) => {
-    const id = nextId++; pending.set(id, resolve); ws.send(JSON.stringify({ id, method, params }))
+  const send = (method, params = {}) =>
+    withTimeout(new Promise((resolve) => {
+      const id = nextId++
+      pending.set(id, resolve)
+      ws.send(JSON.stringify({ id, method, params }))
+    }), 15000, `cdp ${method}`)
+  const ready = new Promise((resolve, reject) => {
+    ws.addEventListener('open', resolve, { once: true })
+    ws.addEventListener('error', () => reject(new Error('websocket connection error')), { once: true })
   })
-  const ready = new Promise((resolve) => ws.addEventListener('open', resolve, { once: true }))
   const evaluate = async (expression) => {
     const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
-    if (r.result && r.result.exceptionDetails) throw new Error('eval threw: ' + JSON.stringify(r.result.exceptionDetails.exception))
+    if (r.result && r.result.exceptionDetails) {
+      throw new Error('eval threw: ' + JSON.stringify(r.result.exceptionDetails.exception))
+    }
     return r.result.result.value
   }
   return { ready, evaluate }
@@ -79,14 +103,14 @@ const typeAndEnter = (selector, value) => `(() => {
 })()`
 
 async function main() {
-  const args = ['.', fixture, `--remote-debugging-port=${PORT}`]
+  const args = ['.', fixture, `--remote-debugging-port=${PORT}`, '--remote-allow-origins=*']
   if (process.platform === 'linux') args.push('--no-sandbox')
   child = spawn(electron, args, { cwd: appDir, env: { ...process.env, NODE_ENV: 'development', ELECTRON_ENABLE_LOGGING: '1' } })
   child.stdout.on('data', () => {}); child.stderr.on('data', () => {})
 
   const target = await findMainTarget()
   const cdp = connect(target.webSocketDebuggerUrl)
-  await cdp.ready
+  await withTimeout(cdp.ready, 20000, 'cdp websocket open')
   await sleep(SETTLE_MS) // let the board render + the panel populate
 
   await cdp.evaluate(typeAndEnter('#breakdown-add-location', 'INT. KITCHEN'))
@@ -97,8 +121,8 @@ async function main() {
     lensSelected: document.querySelector('#breakdown-lens').selectedOptions[0].textContent
   })`))
   console.log('DOM after drive:', JSON.stringify(dom))
-  if (dom.locSelected !== 'INT. KITCHEN') fail(`location not selected in DOM: ${dom.locSelected}`)
-  if (dom.lensSelected !== '35mm') fail(`lens not selected in DOM: ${dom.lensSelected}`)
+  if (dom.locSelected !== 'INT. KITCHEN') return fail(`location not selected in DOM: ${dom.locSelected}`)
+  if (dom.lensSelected !== '35mm') return fail(`lens not selected in DOM: ${dom.lensSelected}`)
 
   await sleep(7000) // scene autosave timer is 5s; project.json writes immediately
 
@@ -114,11 +138,10 @@ async function main() {
   }
   console.log('Persisted checks:', JSON.stringify(checks))
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k)
-  if (failed.length) fail(`persistence checks failed: ${failed.join(', ')}`)
+  if (failed.length) return fail(`persistence checks failed: ${failed.join(', ')}`)
 
-  console.log('DRIVE PASS')
-  cleanup()
-  process.exit(0)
+  clearTimeout(watchdog)
+  pass()
 }
 
 main().catch((err) => fail(err.message))

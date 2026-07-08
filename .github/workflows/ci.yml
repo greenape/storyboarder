@@ -80,6 +80,7 @@ jobs:
       # the scene file. This is what smoke can't do — it exercises clicks/typing.
       - name: Drive test — breakdown panel (Linux, xvfb)
         if: runner.os == 'Linux'
+        timeout-minutes: 6
         run: xvfb-run -a npm run test:drive:breakdown
         env:
           SMOKE_SETTLE_MS: "45000"
