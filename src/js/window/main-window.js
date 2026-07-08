@@ -1231,6 +1231,8 @@ const loadBoardUI = async () => {
     renderMetaData()
   })
 
+  setupBreakdownInputs()
+
 
     // for (var item of document.querySelectorAll('.thumbnail')) {
     //   item.classList.remove('active')
@@ -3736,11 +3738,117 @@ const renderShotMetadata = () => {
   document.querySelector('#board-metadata #board-numbers').innerHTML = `${i18n.t('main-window.board-information.board')}: ` + boardData.boards[currentBoard].number + ` ${i18n.t("main-window.board-information.of")} ` + boardData.boards.length
 }
 
+// Phase 3: the breakdown panel — assign a scene location + a per-shot lens from
+// the project.json vocabularies (project.breakdown), with "+ new" to add items.
+// Location is scene-level (boardData.metadata); lens is shot-level (the current
+// board's shot). Adding an item persists project.json; assignment persists the
+// scene. See revival-plan §3 / docs Phase 3.
+const currentShotForBoard = () => {
+  if (!boardData || !Array.isArray(boardData.shots)) return null
+  const board = boardData.boards[currentBoard]
+  return board ? boardData.shots.find(shot => shot.id === board.shotId) : null
+}
+
+const populateVocabSelect = (select, items, selectedId, noneLabel) => {
+  select.innerHTML = ''
+  const none = document.createElement('option')
+  none.value = ''
+  none.textContent = noneLabel
+  select.appendChild(none)
+  for (const item of items) {
+    const opt = document.createElement('option')
+    opt.value = item.id
+    opt.textContent = item.name || item.id
+    select.appendChild(opt)
+  }
+  select.value = selectedId || ''
+}
+
+const renderBreakdown = () => {
+  const locationSelect = document.querySelector('#breakdown-location')
+  const lensSelect = document.querySelector('#breakdown-lens')
+  if (!locationSelect || !lensSelect || !projectData) return
+  projectModel.ensureBreakdown(projectData)
+
+  populateVocabSelect(
+    locationSelect,
+    projectData.breakdown.locations,
+    boardData.metadata && boardData.metadata.locationId,
+    '— no location —'
+  )
+
+  const shot = currentShotForBoard()
+  populateVocabSelect(
+    lensSelect,
+    projectData.breakdown.lensKit,
+    shot && shot.metadata ? shot.metadata.lensId : '',
+    '— no lens —'
+  )
+  lensSelect.disabled = !shot
+}
+
+const setupBreakdownInputs = () => {
+  const locationSelect = document.querySelector('#breakdown-location')
+  const lensSelect = document.querySelector('#breakdown-lens')
+  const addLocation = document.querySelector('#breakdown-add-location')
+  const addLens = document.querySelector('#breakdown-add-lens')
+  if (!locationSelect) return
+
+  locationSelect.addEventListener('change', (e) => {
+    if (!boardData.metadata) boardData.metadata = sceneModel.defaultSceneMetadata()
+    boardData.metadata.locationId = e.target.value || null
+    markBoardFileDirty()
+  })
+
+  lensSelect.addEventListener('change', (e) => {
+    const shot = currentShotForBoard()
+    if (!shot) return
+    if (!shot.metadata) shot.metadata = {}
+    shot.metadata.lensId = e.target.value || null
+    markBoardFileDirty()
+  })
+
+  const addVocab = (kind, name, assign) => {
+    if (!name || !name.trim() || !projectData) return
+    const item = projectModel.addVocabItem(projectData, kind, { name: name.trim() })
+    saveProjectFile()
+    assign(item.id)
+    markBoardFileDirty()
+    renderBreakdown()
+  }
+  const wireAdd = (input, kind, assign) => {
+    input && input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        addVocab(kind, input.value, assign)
+        input.value = ''
+      }
+    })
+  }
+  wireAdd(addLocation, 'locations', (id) => {
+    if (!boardData.metadata) boardData.metadata = sceneModel.defaultSceneMetadata()
+    boardData.metadata.locationId = id
+  })
+  wireAdd(addLens, 'lensKit', (id) => {
+    const shot = currentShotForBoard()
+    if (shot) {
+      if (!shot.metadata) shot.metadata = {}
+      shot.metadata.lensId = id
+    }
+  })
+
+  // typing a vocab name must not fire drawing-tool keyboard shortcuts
+  for (const input of [addLocation, addLens]) {
+    if (!input) continue
+    input.addEventListener('focus', () => { textInputMode = true })
+    input.addEventListener('blur', () => { textInputMode = false })
+  }
+}
+
 let renderMetaData = () => {
   renderShotMetadata()
 
   // reset values
-  let editableInputs = document.querySelectorAll('#board-metadata input:not(.layers-ui-reference-opacity), textarea')
+  let editableInputs = document.querySelectorAll('#board-metadata input:not(.layers-ui-reference-opacity):not(.breakdown-add), textarea')
   for (var item of editableInputs) {
     item.value = ''
     item.checked = false
@@ -3802,6 +3910,7 @@ let renderMetaData = () => {
     document.querySelector('textarea[name="notes"]').value = boardData.boards[currentBoard].notes
   }
   renderMetaDataLineMileage()
+  renderBreakdown()
 
   // TODO how to regenerate tooltips?
   // if (boardData.defaultBoardTiming) {
