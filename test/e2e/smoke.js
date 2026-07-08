@@ -93,17 +93,30 @@ function finish() {
   // migration itself is unit-tested); confirms load→migrate→autosave doesn't
   // break, without gating on autosave timing.
   let shotsOnDisk = 'n/a'
+  let sceneMeta = 'n/a'
   try {
     const saved = fs.readJsonSync(fixture)
     shotsOnDisk = Array.isArray(saved.shots)
       ? `yes (${saved.shots.length} shots, shotId on every board: ${saved.boards.every((b) => b.shotId)})`
       : 'no'
+    sceneMeta = saved.id && saved.metadata ? `yes (id + metadata)` : 'no'
   } catch {}
+
+  // Phase 3: was the project.json manifest created at the project root?
+  let manifest = 'n/a'
+  try {
+    const p = fs.readJsonSync(path.join(path.dirname(fixture), 'project.json'))
+    manifest = `yes (v${p.version}, breakdown: ${Object.keys(p.breakdown || {}).join('/')})`
+  } catch {
+    manifest = 'no'
+  }
 
   console.log(`fixture: ${origFixture}`)
   console.log(`rendered boards: ${rendered}`)
   console.log(`fatal errors: ${fatals.length}`)
   console.log(`shots migrated to disk: ${shotsOnDisk}`)
+  console.log(`scene metadata on disk: ${sceneMeta}`)
+  console.log(`project manifest written: ${manifest}`)
   fatals.slice(0, 25).forEach((l) => console.log(`  [fatal] ${l.trim()}`))
 
   try {
