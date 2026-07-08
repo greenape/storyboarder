@@ -127,13 +127,22 @@ async function main() {
   await cdp.evaluate(typeAndEnter('#breakdown-add-location', 'INT. KITCHEN'))
   await cdp.evaluate(typeAndEnter('#breakdown-add-lens', '35mm'))
 
+  // cast: add two, then remove one via its chip ×
+  await cdp.evaluate(typeAndEnter('#breakdown-add-cast', 'JANE'))
+  await cdp.evaluate(typeAndEnter('#breakdown-add-cast', 'BOB'))
+  const castAfterAdd = await cdp.evaluate(`document.querySelectorAll('#breakdown-cast-chips .breakdown-chip').length`)
+  await cdp.evaluate(`document.querySelector('#breakdown-cast-chips .breakdown-chip-remove').click()`)
+  const castAfterRemove = await cdp.evaluate(`document.querySelectorAll('#breakdown-cast-chips .breakdown-chip').length`)
+
   const dom = JSON.parse(await cdp.evaluate(`JSON.stringify({
     locSelected: document.querySelector('#breakdown-location').selectedOptions[0].textContent,
     lensSelected: document.querySelector('#breakdown-lens').selectedOptions[0].textContent
   })`))
-  console.log('DOM after drive:', JSON.stringify(dom))
+  console.log('DOM after drive:', JSON.stringify({ ...dom, castAfterAdd, castAfterRemove }))
   if (dom.locSelected !== 'INT. KITCHEN') return fail(`location not selected in DOM: ${dom.locSelected}`)
   if (dom.lensSelected !== '35mm') return fail(`lens not selected in DOM: ${dom.lensSelected}`)
+  if (castAfterAdd !== 2) return fail(`expected 2 cast chips, got ${castAfterAdd}`)
+  if (castAfterRemove !== 1) return fail(`expected 1 cast chip after remove, got ${castAfterRemove}`)
 
   await sleep(7000) // scene autosave timer is 5s; project.json writes immediately
 
@@ -141,11 +150,14 @@ async function main() {
   const scene = fs.readJsonSync(fixture)
   const firstShot = scene.shots && scene.shots[0]
 
+  const sceneCast = (scene.metadata && scene.metadata.castIds) || []
   const checks = {
     projectHasLocation: project.breakdown.locations.some((l) => l.name === 'INT. KITCHEN'),
     projectHasLens: project.breakdown.lensKit.some((l) => l.name === '35mm'),
     sceneLocationResolves: !!(scene.metadata && project.breakdown.locations.some((l) => l.id === scene.metadata.locationId)),
     shotLensResolves: !!(firstShot && firstShot.metadata && project.breakdown.lensKit.some((l) => l.id === firstShot.metadata.lensId)),
+    projectHasBothCast: ['JANE', 'BOB'].every((n) => project.breakdown.cast.some((c) => c.name === n)),
+    sceneCastAfterRemove: sceneCast.length === 1 && project.breakdown.cast.some((c) => c.id === sceneCast[0]),
   }
   console.log('Persisted checks:', JSON.stringify(checks))
   const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k)

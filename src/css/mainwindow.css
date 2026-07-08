@@ -1007,3 +1007,18 @@ input[type=range]:focus::-webkit-slider-runnable-track {
   -webkit-user-drag: none;
   user-drag: none;
 }
+
+/* Phase 3 — breakdown panel */
+#breakdown-panel select,
+#breakdown-panel .breakdown-add { width: 100%; margin-top: 2px; }
+.breakdown-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.breakdown-chip {
+  display: inline-flex; align-items: center;
+  background: #4a4a4a; color: #eee;
+  border-radius: 10px; padding: 2px 6px; font-size: 11px;
+}
+.breakdown-chip-remove {
+  background: none; border: none; color: #bbb;
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 0 0 0 4px;
+}
+.breakdown-chip-remove:hover { color: #fff; }

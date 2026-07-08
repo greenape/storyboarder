@@ -3764,6 +3764,33 @@ const populateVocabSelect = (select, items, selectedId, noneLabel) => {
   select.value = selectedId || ''
 }
 
+// Render the scene's cast as removable chips (boardData.metadata.castIds resolved
+// to names via the project vocab).
+const renderCastChips = () => {
+  const container = document.querySelector('#breakdown-cast-chips')
+  if (!container || !projectData) return
+  const castIds = (boardData.metadata && boardData.metadata.castIds) || []
+  const byId = {}
+  for (const member of projectData.breakdown.cast) byId[member.id] = member
+
+  container.innerHTML = ''
+  for (const id of castIds) {
+    const member = byId[id]
+    if (!member) continue
+    const chip = document.createElement('span')
+    chip.className = 'breakdown-chip'
+    chip.dataset.id = id
+    chip.textContent = member.name + ' '
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'breakdown-chip-remove'
+    remove.dataset.id = id
+    remove.textContent = '×'
+    chip.appendChild(remove)
+    container.appendChild(chip)
+  }
+}
+
 const renderBreakdown = () => {
   const locationSelect = document.querySelector('#breakdown-location')
   const lensSelect = document.querySelector('#breakdown-lens')
@@ -3785,6 +3812,8 @@ const renderBreakdown = () => {
     '— no lens —'
   )
   lensSelect.disabled = !shot
+
+  renderCastChips()
 }
 
 const setupBreakdownInputs = () => {
@@ -3836,8 +3865,39 @@ const setupBreakdownInputs = () => {
     }
   })
 
+  // cast is multi-value (scene-level chips): add reuses an existing cast member by
+  // name (case-insensitive) or mints one, then assigns it to the scene.
+  const addCast = document.querySelector('#breakdown-add-cast')
+  const castChips = document.querySelector('#breakdown-cast-chips')
+
+  const addCastMember = (name) => {
+    if (!name || !name.trim() || !projectData) return
+    const trimmed = name.trim()
+    let member = projectData.breakdown.cast.find(c => (c.name || '').toLowerCase() === trimmed.toLowerCase())
+    if (!member) {
+      member = projectModel.addVocabItem(projectData, 'cast', { name: trimmed })
+      saveProjectFile()
+    }
+    if (!boardData.metadata) boardData.metadata = sceneModel.defaultSceneMetadata()
+    if (!boardData.metadata.castIds.includes(member.id)) {
+      boardData.metadata.castIds.push(member.id)
+      markBoardFileDirty()
+    }
+    renderBreakdown()
+  }
+  addCast && addCast.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { addCastMember(addCast.value); addCast.value = '' }
+  })
+  castChips && castChips.addEventListener('click', (e) => {
+    const btn = e.target.closest('.breakdown-chip-remove')
+    if (!btn || !boardData.metadata || !Array.isArray(boardData.metadata.castIds)) return
+    boardData.metadata.castIds = boardData.metadata.castIds.filter(id => id !== btn.dataset.id)
+    markBoardFileDirty()
+    renderBreakdown()
+  })
+
   // typing a vocab name must not fire drawing-tool keyboard shortcuts
-  for (const input of [addLocation, addLens]) {
+  for (const input of [addLocation, addLens, addCast]) {
     if (!input) continue
     input.addEventListener('focus', () => { textInputMode = true })
     input.addEventListener('blur', () => { textInputMode = false })
