@@ -1,0 +1,136 @@
+// Stripboard drive test — opens the schedule overlay, adds a day, assigns a shot,
+// and asserts the schedule persists to project.json (shoot order), all through the
+// real UI over CDP. Same hardened harness as drive-breakdown.js.
+//
+// Run: node test/e2e/drive-stripboard.js   (requires a display; uses a temp copy)
+
+const { spawn } = require('child_process')
+const path = require('path')
+const fs = require('fs-extra')
+const os = require('os')
+
+const appDir = path.resolve(__dirname, '..', '..')
+const electron = require('electron')
+const PORT = Number(process.env.DRIVE_PORT) || 9231
+const SETTLE_MS = Number(process.env.SMOKE_SETTLE_MS) || 12000
+
+const WS = typeof WebSocket !== 'undefined' ? WebSocket : require('ws')
+
+const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-strip-'))
+fs.copySync(path.join(appDir, 'test', 'fixtures', 'example'), path.join(workDir, 'example'))
+const fixture = path.join(workDir, 'example', 'example.storyboarder')
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const withTimeout = (promise, ms, label) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout: ${label} after ${ms}ms`)), ms))])
+
+let child
+let done = false
+function cleanup() {
+  try { child && child.kill('SIGKILL') } catch {}
+  try { fs.removeSync(workDir) } catch {}
+}
+const fail = (msg) => { if (done) return; done = true; console.log('DRIVE FAIL:', msg); cleanup(); process.exit(1) }
+const pass = () => { if (done) return; done = true; console.log('DRIVE PASS'); cleanup(); process.exit(0) }
+
+const watchdog = setTimeout(() => fail('watchdog: drive test exceeded max runtime'), SETTLE_MS + 120000)
+watchdog.unref?.()
+
+async function findMainTarget() {
+  for (let i = 0; i < 80; i++) {
+    try {
+      const res = await withTimeout(fetch(`http://127.0.0.1:${PORT}/json/list`), 4000, 'json/list')
+      const targets = await res.json()
+      const main = targets.find((t) => t.type === 'page' && /main-window\.html/.test(t.url))
+      if (main && main.webSocketDebuggerUrl) return main
+    } catch {}
+    await sleep(500)
+  }
+  throw new Error('main-window CDP target never appeared')
+}
+
+function connect(wsUrl) {
+  const ws = new WS(wsUrl)
+  let nextId = 1
+  const pending = new Map()
+  ws.addEventListener('message', (ev) => {
+    const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : ev.data.toString())
+    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id) }
+  })
+  const send = (method, params = {}) =>
+    withTimeout(new Promise((resolve) => {
+      const id = nextId++
+      pending.set(id, resolve)
+      ws.send(JSON.stringify({ id, method, params }))
+    }), 15000, `cdp ${method}`)
+  const ready = new Promise((resolve, reject) => {
+    ws.addEventListener('open', resolve, { once: true })
+    ws.addEventListener('error', () => reject(new Error('websocket connection error')), { once: true })
+  })
+  const enable = () => send('Runtime.enable')
+  const evaluateOnce = async (expression) => {
+    const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+    if (r.result && r.result.exceptionDetails) throw new Error('eval threw: ' + JSON.stringify(r.result.exceptionDetails.exception))
+    return r.result.result.value
+  }
+  const evaluate = async (expression) => {
+    try { return await evaluateOnce(expression) } catch { await sleep(2000); return evaluateOnce(expression) }
+  }
+  return { ready, enable, evaluate }
+}
+
+async function main() {
+  const args = ['.', fixture, `--remote-debugging-port=${PORT}`, '--remote-allow-origins=*']
+  if (process.platform === 'linux') args.push('--no-sandbox')
+  child = spawn(electron, args, { cwd: appDir, env: { ...process.env, NODE_ENV: 'development', ELECTRON_ENABLE_LOGGING: '1' } })
+  child.stdout.on('data', () => {}); child.stderr.on('data', () => {})
+
+  const target = await findMainTarget()
+  const cdp = connect(target.webSocketDebuggerUrl)
+  await withTimeout(cdp.ready, 20000, 'cdp websocket open')
+  await cdp.enable()
+  await sleep(SETTLE_MS)
+
+  // open the stripboard, add a day, assign the first shot to it
+  await cdp.evaluate(`document.querySelector('#open-stripboard').click()`)
+  await cdp.evaluate(`document.querySelector('#stripboard-add-day').click()`)
+  const assigned = await cdp.evaluate(`(() => {
+    const sel = document.querySelector('.stripboard-shot-day')
+    const dayOption = sel.options[1] // the day we just added (option 0 is Unscheduled)
+    sel.value = dayOption.value
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+    return dayOption.value
+  })()`)
+
+  const dom = JSON.parse(await cdp.evaluate(`JSON.stringify({
+    dayCount: document.querySelectorAll('#stripboard-days .stripboard-day').length,
+    chipCount: document.querySelectorAll('#stripboard-days .stripboard-chip').length,
+    selValue: document.querySelector('.stripboard-shot-day').value
+  })`))
+  console.log('DOM after drive:', JSON.stringify({ ...dom, assigned }))
+  if (dom.dayCount !== 1) return fail(`expected 1 day, got ${dom.dayCount}`)
+  if (dom.chipCount !== 1) return fail(`expected 1 scheduled shot chip, got ${dom.chipCount}`)
+  if (dom.selValue !== assigned) return fail(`shot's day select did not stick`)
+
+  await sleep(7000) // project.json is written immediately on assign; allow for it
+
+  const project = fs.readJsonSync(path.join(path.dirname(fixture), 'project.json'))
+  const scene = fs.readJsonSync(fixture)
+  const sceneShotIds = new Set((scene.shots || []).map((s) => s.id))
+  const day = project.schedule.days[0]
+
+  const checks = {
+    scheduleHasOneDay: project.schedule.days.length === 1,
+    dayHasOneShot: !!(day && day.shotIds.length === 1),
+    shotIsARealSceneShot: !!(day && sceneShotIds.has(day.shotIds[0])),
+    storyOrderUntouched: (scene.shots || []).length === new Set((scene.shots || []).map((s) => s.id)).size,
+  }
+  console.log('Persisted checks:', JSON.stringify(checks))
+  const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([k]) => k)
+  if (failed.length) return fail(`persistence checks failed: ${failed.join(', ')}`)
+
+  clearTimeout(watchdog)
+  pass()
+}
+
+main().catch((err) => fail(err.message))

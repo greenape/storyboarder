@@ -353,7 +353,7 @@
             </div>
 
             <div class="row" id="breakdown-panel">
-              <div><svg class="smallicon"><use xlink:href="./img/symbol-defs.svg#icon-board"></use></svg><span>Breakdown</span></div>
+              <div><svg class="smallicon"><use xlink:href="./img/symbol-defs.svg#icon-board"></use></svg><span>Breakdown</span> <button type="button" id="open-stripboard" class="flatbutton small">Stripboard…</button></div>
               <div class="row">
                 <div class="col">
                   <label for="breakdown-location">Location</label>
@@ -643,6 +643,25 @@
 
     </div>
     <div id="notifications" class="notifications"></div>
+
+    <!-- Phase 4: stripboard (shooting schedule) overlay -->
+    <div id="stripboard-panel" style="display:none">
+      <div class="stripboard-header">
+        <span class="stripboard-title">Stripboard — shooting schedule</span>
+        <button type="button" id="stripboard-add-day" class="flatbutton small">+ Add day</button>
+        <button type="button" id="stripboard-close" class="flatbutton small">Close</button>
+      </div>
+      <div class="stripboard-body">
+        <div class="stripboard-col">
+          <h3>Shots — story order</h3>
+          <div id="stripboard-shot-list"></div>
+        </div>
+        <div class="stripboard-col">
+          <h3>Schedule — shoot order</h3>
+          <div id="stripboard-days"></div>
+        </div>
+      </div>
+    </div>
   <script>
     if (typeof require !== 'undefined') {
    

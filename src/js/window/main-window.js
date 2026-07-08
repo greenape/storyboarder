@@ -63,6 +63,7 @@ const shotModel = require('../models/shot')
 const sceneModel = require('../models/scene')
 const projectModel = require('../models/project')
 const lensModel = require('../models/lens')
+const scheduleModel = require('../models/schedule')
 const watermarkModel = require('../models/watermark')
 
 const AudioPlayback = require('./audio-playback')
@@ -1233,6 +1234,7 @@ const loadBoardUI = async () => {
   })
 
   setupBreakdownInputs()
+  setupStripboard()
 
 
     // for (var item of document.querySelectorAll('.thumbnail')) {
@@ -3926,6 +3928,141 @@ const setupBreakdownInputs = () => {
     input.addEventListener('focus', () => { textInputMode = true })
     input.addEventListener('blur', () => { textInputMode = false })
   }
+}
+
+// Phase 4: the stripboard — a shooting schedule (shoot order) over the same shots,
+// separate from story order. Shows the current scene's shots with a per-shot day
+// assignment, and the schedule's days. Assignments persist to project.json.schedule.
+// (The shot list is the loaded scene; a shot placed from another scene still shows
+// in its day, by id — a multi-scene aggregate view is a later refinement.)
+const shotDisplayLabel = shot => shot.label || shot.id
+
+const dayIdForShot = (schedule, shotId) => {
+  const day = (schedule.days || []).find(d => d.shotIds.includes(shotId))
+  return day ? day.id : ''
+}
+
+const renderStripboard = () => {
+  const shotListEl = document.querySelector('#stripboard-shot-list')
+  const daysEl = document.querySelector('#stripboard-days')
+  if (!shotListEl || !daysEl || !projectData || !boardData) return
+  scheduleModel.ensureSchedule(projectData.schedule)
+  const schedule = projectData.schedule
+  const shots = boardData.shots || []
+
+  // left: the scene's shots (story order), each with a day <select> + location hint
+  shotListEl.innerHTML = ''
+  for (const shot of shots) {
+    const row = document.createElement('div')
+    row.className = 'stripboard-shot-row'
+
+    const firstBoard = boardData.boards.find(b => b.uid === shot.boardUids[0])
+    const summary = firstBoard ? sceneModel.breakdownSummaryForBoard(boardData, projectData, firstBoard) : null
+    const hint = summary && summary.location ? ` · ${summary.location}` : ''
+
+    const label = document.createElement('span')
+    label.className = 'stripboard-shot-label'
+    label.textContent = shotDisplayLabel(shot) + hint
+
+    const select = document.createElement('select')
+    select.className = 'stripboard-shot-day'
+    select.dataset.shotId = shot.id
+    const none = document.createElement('option')
+    none.value = ''
+    none.textContent = 'Unscheduled'
+    select.appendChild(none)
+    for (const day of schedule.days) {
+      const opt = document.createElement('option')
+      opt.value = day.id
+      opt.textContent = day.label
+      select.appendChild(opt)
+    }
+    select.value = dayIdForShot(schedule, shot.id)
+
+    row.appendChild(label)
+    row.appendChild(select)
+    shotListEl.appendChild(row)
+  }
+
+  // right: the schedule, day by day
+  const labelById = {}
+  for (const shot of shots) labelById[shot.id] = shotDisplayLabel(shot)
+  daysEl.innerHTML = ''
+  for (const day of schedule.days) {
+    const dayEl = document.createElement('div')
+    dayEl.className = 'stripboard-day'
+
+    const head = document.createElement('div')
+    head.className = 'stripboard-day-head'
+    head.textContent = `${day.label} (${day.shotIds.length}) `
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'stripboard-day-remove flatbutton small'
+    remove.dataset.dayId = day.id
+    remove.textContent = '×'
+    head.appendChild(remove)
+    dayEl.appendChild(head)
+
+    const chips = document.createElement('div')
+    for (const shotId of day.shotIds) {
+      const chip = document.createElement('span')
+      chip.className = 'stripboard-chip'
+      chip.textContent = labelById[shotId] || shotId
+      chips.appendChild(chip)
+    }
+    dayEl.appendChild(chips)
+    daysEl.appendChild(dayEl)
+  }
+}
+
+const openStripboard = () => {
+  const panel = document.querySelector('#stripboard-panel')
+  if (!panel) return
+  panel.style.display = ''
+  renderStripboard()
+}
+
+const closeStripboard = () => {
+  const panel = document.querySelector('#stripboard-panel')
+  if (panel) panel.style.display = 'none'
+}
+
+const setupStripboard = () => {
+  const open = document.querySelector('#open-stripboard')
+  const close = document.querySelector('#stripboard-close')
+  const addDay = document.querySelector('#stripboard-add-day')
+  const shotListEl = document.querySelector('#stripboard-shot-list')
+  const daysEl = document.querySelector('#stripboard-days')
+
+  open && open.addEventListener('click', openStripboard)
+  close && close.addEventListener('click', closeStripboard)
+
+  addDay && addDay.addEventListener('click', () => {
+    if (!projectData) return
+    scheduleModel.addDay(projectData.schedule)
+    saveProjectFile()
+    renderStripboard()
+  })
+
+  // assign a shot to a day (or back to unscheduled)
+  shotListEl && shotListEl.addEventListener('change', (e) => {
+    const select = e.target.closest('.stripboard-shot-day')
+    if (!select || !projectData) return
+    const shotId = select.dataset.shotId
+    if (select.value) scheduleModel.moveShotToDay(projectData.schedule, shotId, select.value)
+    else scheduleModel.moveShotToUnscheduled(projectData.schedule, shotId)
+    saveProjectFile()
+    renderStripboard()
+  })
+
+  // remove a day (its shots return to unscheduled)
+  daysEl && daysEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('.stripboard-day-remove')
+    if (!btn || !projectData) return
+    scheduleModel.removeDay(projectData.schedule, btn.dataset.dayId)
+    saveProjectFile()
+    renderStripboard()
+  })
 }
 
 let renderMetaData = () => {

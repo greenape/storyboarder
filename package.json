@@ -42,7 +42,8 @@
     "build:server": "cd server && npm run build",
     "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider npm-run-all build:*",
     "deploy:prod": "node ./scripts/deploy.js",
-    "test:drive:breakdown": "node test/e2e/drive-breakdown.js"
+    "test:drive:breakdown": "node test/e2e/drive-breakdown.js",
+    "test:drive:stripboard": "node test/e2e/drive-stripboard.js"
   },
   "repository": {
     "type": "git",
