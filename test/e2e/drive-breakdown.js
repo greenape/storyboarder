@@ -144,6 +144,12 @@ async function main() {
   if (castAfterAdd !== 2) return fail(`expected 2 cast chips, got ${castAfterAdd}`)
   if (castAfterRemove !== 1) return fail(`expected 1 cast chip after remove, got ${castAfterRemove}`)
 
+  // lens-from-3D-camera: board 0 carries a Shot Generator camera (fov 22.25 → 38mm)
+  await cdp.evaluate(`document.querySelector('#breakdown-lens-from-sg').click()`)
+  const lensFromSg = await cdp.evaluate(`document.querySelector('#breakdown-lens').selectedOptions[0].textContent`)
+  console.log('lens from 3D camera:', lensFromSg)
+  if (lensFromSg !== '38mm') return fail(`expected 38mm from 3D camera, got ${lensFromSg}`)
+
   await sleep(7000) // scene autosave timer is 5s; project.json writes immediately
 
   const project = fs.readJsonSync(path.join(path.dirname(fixture), 'project.json'))

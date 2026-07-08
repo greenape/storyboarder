@@ -62,6 +62,7 @@ const boardModel = require('../models/board')
 const shotModel = require('../models/shot')
 const sceneModel = require('../models/scene')
 const projectModel = require('../models/project')
+const lensModel = require('../models/lens')
 const watermarkModel = require('../models/watermark')
 
 const AudioPlayback = require('./audio-playback')
@@ -3813,6 +3814,13 @@ const renderBreakdown = () => {
   )
   lensSelect.disabled = !shot
 
+  // offer "From 3D camera" only when the current board carries a Shot Generator camera
+  const lensFromSg = document.querySelector('#breakdown-lens-from-sg')
+  if (lensFromSg) {
+    const hasCamera = !!shot && lensModel.cameraFovFromBoard(boardData.boards[currentBoard]) != null
+    lensFromSg.style.display = hasCamera ? '' : 'none'
+  }
+
   renderCastChips()
 }
 
@@ -3863,6 +3871,22 @@ const setupBreakdownInputs = () => {
       if (!shot.metadata) shot.metadata = {}
       shot.metadata.lensId = id
     }
+  })
+
+  // "From 3D camera": derive the shot's lens from the board's Shot Generator camera
+  // (fov → focal length → find-or-create a lens-kit item).
+  const lensFromSg = document.querySelector('#breakdown-lens-from-sg')
+  lensFromSg && lensFromSg.addEventListener('click', () => {
+    const shot = currentShotForBoard()
+    if (!shot || !projectData) return
+    const before = projectData.breakdown.lensKit.length
+    const lensId = lensModel.lensIdForBoard(projectData, boardData.boards[currentBoard])
+    if (!lensId) return
+    if (projectData.breakdown.lensKit.length !== before) saveProjectFile() // a new lens was minted
+    if (!shot.metadata) shot.metadata = {}
+    shot.metadata.lensId = lensId
+    markBoardFileDirty()
+    renderBreakdown()
   })
 
   // cast is multi-value (scene-level chips): add reuses an existing cast member by
