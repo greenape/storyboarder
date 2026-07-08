@@ -85,14 +85,24 @@ function connect(wsUrl) {
     ws.addEventListener('open', resolve, { once: true })
     ws.addEventListener('error', () => reject(new Error('websocket connection error')), { once: true })
   })
-  const evaluate = async (expression) => {
+  const enable = () => send('Runtime.enable') // establishes the execution context (needed on headless CI)
+  const evaluateOnce = async (expression) => {
     const r = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
     if (r.result && r.result.exceptionDetails) {
       throw new Error('eval threw: ' + JSON.stringify(r.result.exceptionDetails.exception))
     }
     return r.result.result.value
   }
-  return { ready, evaluate }
+  // retry once — the renderer's context can lag on a slow headless runner
+  const evaluate = async (expression) => {
+    try {
+      return await evaluateOnce(expression)
+    } catch (err) {
+      await sleep(2000)
+      return evaluateOnce(expression)
+    }
+  }
+  return { ready, enable, evaluate }
 }
 
 const typeAndEnter = (selector, value) => `(() => {
@@ -111,6 +121,7 @@ async function main() {
   const target = await findMainTarget()
   const cdp = connect(target.webSocketDebuggerUrl)
   await withTimeout(cdp.ready, 20000, 'cdp websocket open')
+  await cdp.enable() // Runtime.enable — establish the execution context before evaluating
   await sleep(SETTLE_MS) // let the board render + the panel populate
 
   await cdp.evaluate(typeAndEnter('#breakdown-add-location', 'INT. KITCHEN'))
