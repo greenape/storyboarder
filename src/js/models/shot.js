@@ -95,16 +95,50 @@ const migrateToShots = boardData => {
     if (!board.uid) board.uid = util.uidGen(5)
   })
 
-  const shots = shotsFromBoards(boardData.boards)
+  boardData.shots = shotsFromBoards(boardData.boards)
+  return stampShotIds(boardData)
+}
 
+// Re-stamp every board's shotId from the shots' boardUids. Shared by migration
+// and reconciliation.
+const stampShotIds = boardData => {
   const shotIdByUid = {}
-  shots.forEach(shot => {
+  boardData.shots.forEach(shot => {
     shot.boardUids.forEach(uid => { shotIdByUid[uid] = shot.id })
   })
   boardData.boards.forEach(board => { board.shotId = shotIdByUid[board.uid] })
-
-  boardData.shots = shots
   return boardData
+}
+
+// Reconcile shots[] with the current boards after edits. `newShot` stays the
+// authoritative boundary source (all the battle-tested board-edit paths keep
+// mutating it); shots[] is re-derived from it here, but the id + metadata of any
+// shot whose FIRST board is unchanged are preserved — so shot IDs and their Phase
+// 3 breakdown metadata survive content edits, mid-shot inserts, reorders, and
+// deletions that don't move a shot's opening board. Idempotent. Call at save time
+// so a scene's shots[] never goes stale relative to its boards.
+const reconcileShots = boardData => {
+  if (!boardData || !Array.isArray(boardData.boards)) return boardData
+
+  const desired = shotsFromBoards(boardData.boards)
+
+  const existingByFirstUid = {}
+  ;(boardData.shots || []).forEach(shot => {
+    const firstUid = shot.boardUids[0]
+    if (firstUid != null && existingByFirstUid[firstUid] == null) {
+      existingByFirstUid[firstUid] = shot
+    }
+  })
+
+  boardData.shots = desired.map(shot => {
+    const match = existingByFirstUid[shot.boardUids[0]]
+    return match
+      // keep the stable id + metadata; refresh membership + display label
+      ? { ...match, boardUids: shot.boardUids, label: shot.label }
+      : shot
+  })
+
+  return stampShotIds(boardData)
 }
 
 // Delete a shot, re-parenting its boards to the adjacent shot (the previous one,
@@ -144,5 +178,6 @@ module.exports = {
   shotsFromBoards,
   boardLabelsFromShots,
   migrateToShots,
+  reconcileShots,
   removeShot
 }

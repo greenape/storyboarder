@@ -202,6 +202,77 @@ describe('models/shot', () => {
     })
   })
 
+  describe('reconcileShots — shots[] stays correct across edits with stable IDs', () => {
+    // set some metadata so we can prove it survives edits
+    const withMetadata = boardData => {
+      boardData.shots.forEach((shot, i) => { shot.metadata.lensId = `ln${i}` })
+      return boardData
+    }
+
+    it('is a no-op (same IDs + metadata) when nothing changed', () => {
+      const boardData = withMetadata(shotModel.migrateToShots({ boards: boardsFromPattern('S.S.S') }))
+      const before = boardData.shots.map(s => ({ id: s.id, lensId: s.metadata.lensId, uids: [...s.boardUids] }))
+
+      shotModel.reconcileShots(boardData)
+
+      const after = boardData.shots.map(s => ({ id: s.id, lensId: s.metadata.lensId, uids: [...s.boardUids] }))
+      assert.deepStrictEqual(after, before)
+    })
+
+    it('keeps shot IDs + metadata when a board is added inside a shot', () => {
+      const boardData = withMetadata(shotModel.migrateToShots({ boards: boardsFromPattern('S.S.') })) // [u0,u1][u2,u3]
+      const ids = boardData.shots.map(s => s.id)
+
+      // insert a new (non-boundary) board into the first shot
+      boardData.boards.splice(1, 0, { uid: 'uNew', newShot: false })
+      shotModel.reconcileShots(boardData)
+
+      assert.deepStrictEqual(boardData.shots.map(s => s.id), ids, 'IDs preserved')
+      assert.deepStrictEqual(boardData.shots.map(s => s.metadata.lensId), ['ln0', 'ln1'], 'metadata preserved')
+      assert.deepStrictEqual(boardData.shots[0].boardUids, ['u0', 'uNew', 'u1'], 'new board joins the shot')
+      assert.strictEqual(boardData.boards.find(b => b.uid === 'uNew').shotId, ids[0], 're-stamped')
+    })
+
+    it('mints a new shot when a new boundary is added, preserving the others', () => {
+      const boardData = withMetadata(shotModel.migrateToShots({ boards: boardsFromPattern('S.S.') }))
+      const [firstId, secondId] = boardData.shots.map(s => s.id)
+
+      // turn the second board into a shot boundary → three shots now
+      boardData.boards[1].newShot = true
+      shotModel.reconcileShots(boardData)
+
+      assert.strictEqual(boardData.shots.length, 3)
+      assert.strictEqual(boardData.shots[0].id, firstId, 'first shot id kept')
+      assert.strictEqual(boardData.shots[2].id, secondId, 'the shot starting at u2 kept its id')
+      assert.ok(![firstId, secondId].includes(boardData.shots[1].id), 'middle shot is newly minted')
+      assert.strictEqual(boardData.shots[0].metadata.lensId, 'ln0', 'kept metadata')
+    })
+
+    it('re-stamps board.shotId for every board and stays idempotent', () => {
+      const boardData = shotModel.migrateToShots({ boards: boardsFromPattern('S.S.S.') })
+      shotModel.reconcileShots(boardData)
+      const snapshot = JSON.stringify(boardData.shots)
+
+      shotModel.reconcileShots(boardData) // second pass
+      assert.strictEqual(JSON.stringify(boardData.shots), snapshot, 'idempotent')
+
+      const shotIds = new Set(boardData.shots.map(s => s.id))
+      for (const board of boardData.boards) assert.ok(shotIds.has(board.shotId))
+    })
+
+    it('labels track the new grouping after a reorder', () => {
+      const boardData = shotModel.migrateToShots({ boards: boardsFromPattern('S.S.S') })
+      // reverse the boards; newShot flags travel with them
+      boardData.boards.reverse()
+      shotModel.reconcileShots(boardData)
+      assert.deepStrictEqual(
+        shotModel.boardLabelsFromShots(boardData),
+        legacyLabels(boardData.boards),
+        'labels match the legacy loop for the reordered boards'
+      )
+    })
+  })
+
   describe('§3.3 invariant 3 — schedule order is independent of story order', () => {
     it('reordering the schedule does not mutate sceneOrder or in-scene shot order', () => {
       const boardData = { boards: boardsFromPattern('S.S.S.') }
