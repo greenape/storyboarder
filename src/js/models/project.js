@@ -124,6 +124,22 @@ const readProject = projectRoot => {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'))
 }
 
+// Walk up from a scene file's directory to find + read the project.json manifest
+// (single-file projects keep it beside the scene; script projects at storyboards/).
+// Used by exporters that receive scenes but not the project. Returns null if none.
+const findAndReadProject = startFilePath => {
+  let dir = path.dirname(startFilePath)
+  for (let depth = 0; depth < 6; depth++) {
+    if (projectExists(dir)) {
+      try { return readProject(dir) } catch { return null }
+    }
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return null
+}
+
 // Atomic write: mirror `saveBoardFile` — write a timestamped backup beside the
 // target, then move it over (overwrite), so a crash mid-write can't truncate a
 // live manifest.
@@ -155,5 +171,6 @@ module.exports = {
   projectFilePath,
   projectExists,
   readProject,
+  findAndReadProject,
   writeProject
 }

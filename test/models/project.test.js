@@ -78,6 +78,24 @@ describe('models/project', () => {
       }
     })
 
+    it('findAndReadProject walks up from a nested scene path to the manifest', () => {
+      const dir = tmp.dirSync({ unsafeCleanup: true })
+      try {
+        // project.json at root; a scene nested two levels down (storyboards/Scene-1/…)
+        projectModel.writeProject(dir.name, projectModel.synthesizeProject({ aspectRatio: 2.35 }, [{ id: 'scn_1' }]))
+        const sceneDir = path.join(dir.name, 'storyboards', 'Scene-1')
+        fs.ensureDirSync(sceneDir)
+        const scenePath = path.join(sceneDir, 'Scene-1.storyboarder')
+        fs.writeFileSync(scenePath, '{}')
+
+        const found = projectModel.findAndReadProject(scenePath)
+        assert.ok(found && found.version === 2, 'found the manifest by walking up')
+        assert.strictEqual(projectModel.findAndReadProject(path.join(dir.name, '..', 'nope.storyboarder')), null)
+      } finally {
+        dir.removeCallback()
+      }
+    })
+
     it('overwrites an existing manifest and leaves no backup files behind', () => {
       const dir = tmp.dirSync({ unsafeCleanup: true })
       try {

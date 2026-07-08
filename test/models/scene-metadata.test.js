@@ -115,6 +115,51 @@ describe('models/scene (breakdown metadata)', () => {
     })
   })
 
+  describe('breakdownSummaryForBoard / breakdownTextForBoard (for exports)', () => {
+    // scene: [u0][u1]; u0's shot has a 35mm lens; scene has location + cast
+    const build = () => {
+      const scene = sceneModel.migrateSceneMetadata(shotModel.migrateToShots({
+        boards: [{ uid: 'u0', newShot: true }, { uid: 'u1', newShot: true }]
+      }))
+      const project = projectModel.defaultProject()
+      const loc = projectModel.addVocabItem(project, 'locations', { name: 'INT. KITCHEN' })
+      const lens = projectModel.addVocabItem(project, 'lensKit', { name: '35mm' })
+      const jane = projectModel.addVocabItem(project, 'cast', { name: 'JANE' })
+      scene.metadata.locationId = loc.id
+      scene.metadata.castIds = [jane.id]
+      scene.shots[0].metadata.lensId = lens.id
+      return { scene, project }
+    }
+
+    it('resolves ids to names, with the shot lens', () => {
+      const { scene, project } = build()
+      const summary = sceneModel.breakdownSummaryForBoard(scene, project, scene.boards[0])
+      assert.deepStrictEqual(summary, { location: 'INT. KITCHEN', lens: '35mm', cast: ['JANE'] })
+    })
+
+    it('inherits the scene location for a shot with none, and has no lens', () => {
+      const { scene, project } = build()
+      const summary = sceneModel.breakdownSummaryForBoard(scene, project, scene.boards[1])
+      assert.strictEqual(summary.location, 'INT. KITCHEN', 'inherited')
+      assert.strictEqual(summary.lens, null)
+    })
+
+    it('formats a one-line string', () => {
+      const { scene, project } = build()
+      assert.strictEqual(
+        sceneModel.breakdownTextForBoard(scene, project, scene.boards[0]),
+        'INT. KITCHEN · 35mm · JANE'
+      )
+    })
+
+    it('returns null when there is no project or nothing assigned', () => {
+      const { scene } = build()
+      assert.strictEqual(sceneModel.breakdownSummaryForBoard(scene, null, scene.boards[0]), null)
+      const bare = sceneModel.migrateSceneMetadata(shotModel.migrateToShots({ boards: [{ uid: 'u0', newShot: true }] }))
+      assert.strictEqual(sceneModel.breakdownTextForBoard(bare, projectModel.defaultProject(), bare.boards[0]), null)
+    })
+  })
+
   describe('integration — delete vocab item then clean up scenes', () => {
     it('removeVocabItem returns the id, which drives scene cleanup', () => {
       const project = projectModel.defaultProject()
