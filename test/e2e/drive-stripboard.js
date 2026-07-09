@@ -171,9 +171,18 @@ async function main() {
 
   const csvPath = path.join(path.dirname(fixture), 'schedule.csv')
   const csvOk = fs.existsSync(csvPath) && fs.readFileSync(csvPath, 'utf8').startsWith('Day,Shot,Location,Cast')
-  console.log('group + export:', JSON.stringify({ groupedDays, csvOk }))
+
+  // printable HTML export
+  await cdp.evaluate(`document.querySelector('#stripboard-export-html').click()`)
+  await sleep(1000)
+  const htmlPath = path.join(path.dirname(fixture), 'schedule.html')
+  const htmlBody = fs.existsSync(htmlPath) ? fs.readFileSync(htmlPath, 'utf8') : ''
+  const htmlOk = htmlBody.startsWith('<!doctype html>') && htmlBody.includes('INT. KITCHEN') && htmlBody.includes('class="strip"')
+
+  console.log('group + export:', JSON.stringify({ groupedDays, csvOk, htmlOk }))
   if (groupedDays < 1) return fail('group by location produced no days')
   if (!csvOk) return fail('schedule.csv not written or has a bad header')
+  if (!htmlOk) return fail('schedule.html not written or missing content')
 
   clearTimeout(watchdog)
   pass()
