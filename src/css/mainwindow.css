@@ -1049,3 +1049,7 @@ input[type=range]:focus::-webkit-slider-runnable-track {
 .stripboard-shot-row:active { cursor: grabbing; }
 .stripboard-day { transition: background 0.1s ease; }
 .stripboard-day:hover { background: rgba(255, 255, 255, 0.03); }
+
+/* Phase 4 polish — day reorder controls */
+.stripboard-day-title { flex: 1; }
+.stripboard-day-head button { margin-left: 4px; }

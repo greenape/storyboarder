@@ -98,8 +98,21 @@ async function main() {
     inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   })()`)
 
-  // open the stripboard, add a day
+  // open the stripboard
   await cdp.evaluate(`document.querySelector('#open-stripboard').click()`)
+
+  // polish 3 — reorder days: add two, move the first down, verify the order swaps,
+  // then clear the days so the rest of the flow starts fresh
+  await cdp.evaluate(`document.querySelector('#stripboard-add-day').click()`)
+  await cdp.evaluate(`document.querySelector('#stripboard-add-day').click()`)
+  const beforeOrder = await cdp.evaluate(`[...document.querySelectorAll('.stripboard-day-title')].map(e => e.textContent).join('|')`)
+  await cdp.evaluate(`document.querySelector('.stripboard-day-down').click()`) // first day's ↓
+  const afterOrder = await cdp.evaluate(`[...document.querySelectorAll('.stripboard-day-title')].map(e => e.textContent).join('|')`)
+  console.log('reorder:', JSON.stringify({ beforeOrder, afterOrder }))
+  if (beforeOrder === afterOrder) return fail(`day reorder did not change order: ${afterOrder}`)
+  await cdp.evaluate(`(() => { let btn; while ((btn = document.querySelector('.stripboard-day-remove'))) btn.click() })()`)
+
+  // add the single day used by the drag / persistence checks below
   await cdp.evaluate(`document.querySelector('#stripboard-add-day').click()`)
 
   // polish 1 — colour-coding: the shot row carries its location + a colour stripe
