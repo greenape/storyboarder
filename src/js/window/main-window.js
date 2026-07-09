@@ -4018,13 +4018,18 @@ const renderStripboard = () => {
 
     const head = document.createElement('div')
     head.className = 'stripboard-day-head'
-    head.textContent = `${day.label} (${day.shotIds.length}) `
-    const remove = document.createElement('button')
-    remove.type = 'button'
-    remove.className = 'stripboard-day-remove flatbutton small'
-    remove.dataset.dayId = day.id
-    remove.textContent = '×'
-    head.appendChild(remove)
+    const title = document.createElement('span')
+    title.className = 'stripboard-day-title'
+    title.textContent = `${day.label} (${day.shotIds.length})`
+    head.appendChild(title)
+    for (const [cls, glyph] of [['stripboard-day-up', '↑'], ['stripboard-day-down', '↓'], ['stripboard-day-remove', '×']]) {
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = `${cls} flatbutton small`
+      btn.dataset.dayId = day.id
+      btn.textContent = glyph
+      head.appendChild(btn)
+    }
     dayEl.appendChild(head)
 
     const chips = document.createElement('div')
@@ -4109,13 +4114,26 @@ const setupStripboard = () => {
     renderStripboard()
   })
 
-  // remove a day (its shots return to unscheduled)
+  // day head buttons: remove (shots return to unscheduled), or reorder up/down
   daysEl && daysEl.addEventListener('click', (e) => {
-    const btn = e.target.closest('.stripboard-day-remove')
-    if (!btn || !projectData) return
-    scheduleModel.removeDay(projectData.schedule, btn.dataset.dayId)
-    saveProjectFile()
-    renderStripboard()
+    if (!projectData) return
+    const remove = e.target.closest('.stripboard-day-remove')
+    if (remove) {
+      scheduleModel.removeDay(projectData.schedule, remove.dataset.dayId)
+      saveProjectFile()
+      renderStripboard()
+      return
+    }
+    const move = e.target.closest('.stripboard-day-up, .stripboard-day-down')
+    if (move) {
+      const dayId = move.dataset.dayId
+      const idx = projectData.schedule.days.findIndex(d => d.id === dayId)
+      if (idx === -1) return
+      const to = move.classList.contains('stripboard-day-up') ? idx - 1 : idx + 1
+      scheduleModel.reorderDays(projectData.schedule, dayId, to)
+      saveProjectFile()
+      renderStripboard()
+    }
   })
 
   // auto-suggest: one day per location
