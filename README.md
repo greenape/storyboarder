@@ -41,6 +41,9 @@ Works with Pens on any tablet or Cintiq or even a Microsoft Surface. Also works 
 * Track changes
 * Collaborate on Github
 * Export to various Formats
+* First-class Shots (addressable, stable across edits)
+* Shot Breakdown (location / lens / cast)
+* Stripboard shooting schedule (shoot order vs. story order)
 
 ## We have 4 brush types which are all you need to draw fast:
 
@@ -72,6 +75,44 @@ Need a straight line? Hold shift while you're drawing and you got straight lines
 *  Thirds
 *  Angles
 *  Onion skin (previous and next board in shot)
+
+## Pre-production suite (breakdown & stripboard)
+
+Storyboarder now carries your boards through to a shooting plan. It's built on
+**first-class shots**: the boards you group with "New Shot?" become addressable Shot
+objects with stable IDs that survive edits, reorders, and re-saves. Existing projects
+are upgraded automatically on open — nothing changes visually.
+
+### Shot breakdown
+
+Every board's inspector has a **Breakdown** panel:
+
+* **Location** — set per scene, from your project's location list (a shot inherits its
+  scene's location).
+* **Lens** — set per shot; **"From 3D camera"** reads the focal length straight off a
+  Shot Generator shot.
+* **Cast** — add cast members as chips on the scene.
+
+Locations, lenses, and cast are project-wide vocabularies (stored in `project.json`), so
+you build them once and reuse them. Breakdown info prints on each board in the **PDF
+export**.
+
+### Stripboard (shooting schedule)
+
+The **Stripboard…** button (in the Breakdown panel) opens a shooting schedule — a second
+ordering of your shots by shoot day, completely independent of story order:
+
+* **Drag shots onto Days** (or use the per-shot dropdown) to build your schedule.
+* Shots are **colour-coded by location**, so same-location work reads as a group — the
+  classic stripboard look.
+* **Group by location** auto-arranges the whole schedule into a day per location, which
+  you then hand-tune. **Add / reorder / remove** days as you like.
+* It spans **every scene** in the project, not just the one you're viewing.
+* **Export CSV** or a **printable HTML schedule** (coloured strips, grouped by day) that
+  you can hand to the crew.
+
+Reordering the schedule never touches your story order — a shot is the same underlying
+object in both views.
 
 ## We got mad simple key commands:
 
