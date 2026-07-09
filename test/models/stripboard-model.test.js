@@ -52,4 +52,37 @@ describe('models/stripboard (buildStripboardModel)', () => {
     assert.deepStrictEqual(model.shotsByScene, [{ title: 'Empty', shots: [] }])
     assert.deepStrictEqual(model.allShotIds, [])
   })
+
+  describe('scheduleToHtml (printable)', () => {
+    const schedule = { days: [{ id: 'd1', label: 'Day 1', shotIds: ['a', 'b'] }], unscheduled: ['c'] }
+    const shotIndex = {
+      a: { label: '1A', location: 'INT. KITCHEN', cast: ['JANE'], sceneTitle: 'Scene 1' },
+      b: { label: '2A', location: 'STREET', cast: [], sceneTitle: 'Scene 1' },
+      c: { label: '1A', location: null, cast: [], sceneTitle: 'Scene 2' }
+    }
+
+    it('renders a day section per day plus an unscheduled tail', () => {
+      const html = stripboardModel.scheduleToHtml(schedule, shotIndex, { title: 'My Shoot' })
+      assert.ok(html.startsWith('<!doctype html>'))
+      assert.ok(html.includes('<title>My Shoot</title>'))
+      assert.ok(html.includes('Day 1 <span class="count">(2)</span>'))
+      assert.ok(html.includes('Unscheduled <span class="count">(1)</span>'))
+      assert.ok(html.includes('1A') && html.includes('INT. KITCHEN') && html.includes('JANE'))
+    })
+
+    it('colours each strip by location (same hue as the UI) and escapes HTML', () => {
+      const html = stripboardModel.scheduleToHtml(
+        { days: [{ id: 'd', label: 'D', shotIds: ['x'] }], unscheduled: [] },
+        { x: { label: '1A', location: 'A & B <big>', cast: [], sceneTitle: 'S' } }
+      )
+      assert.ok(html.includes(`border-left-color:${stripboardModel.locationColor('A & B <big>')}`))
+      assert.ok(html.includes('A &amp; B &lt;big&gt;'), 'escaped')
+      assert.ok(!html.includes('<big>'), 'no raw injection')
+    })
+
+    it('locationColor is stable + null-safe', () => {
+      assert.strictEqual(stripboardModel.locationColor('KITCHEN'), stripboardModel.locationColor('KITCHEN'))
+      assert.ok(stripboardModel.locationColor(null).startsWith('hsl('))
+    })
+  })
 })

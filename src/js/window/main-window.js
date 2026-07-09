@@ -3994,13 +3994,9 @@ const gatherAllScenes = () => {
 const stripboardModelNow = () => stripboardModel.buildStripboardModel(gatherAllScenes(), projectData)
 
 // A stable colour per location name — the classic stripboard colour strip, so
-// same-location shots read as a group across both the shot list and the schedule.
-const locationColorFor = (name) => {
-  if (!name) return null
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0
-  return `hsl(${Math.abs(hash) % 360}, 45%, 42%)`
-}
+// same-location shots read as a group. Delegates to the shared model colour so the
+// on-screen strips and the printable export match; null → no colour.
+const locationColorFor = (name) => name ? stripboardModel.locationColor(name) : null
 
 const renderStripboard = () => {
   const shotListEl = document.querySelector('#stripboard-shot-list')
@@ -4221,6 +4217,23 @@ const setupStripboard = () => {
       log.info('exported schedule CSV to', csvPath)
     } catch (err) {
       log.error('schedule CSV export failed:', err)
+    }
+  })
+
+  // export a print-ready HTML stripboard beside the project
+  const exportHtmlBtn = document.querySelector('#stripboard-export-html')
+  exportHtmlBtn && exportHtmlBtn.addEventListener('click', () => {
+    if (!projectData || !projectRoot) return
+    const model = stripboardModelNow()
+    const html = stripboardModel.scheduleToHtml(projectData.schedule, model.shotIndex, {
+      title: `Shooting Schedule — ${path.basename(projectRoot)}`
+    })
+    try {
+      const htmlPath = path.join(projectRoot, 'schedule.html')
+      fs.writeFileSync(htmlPath, html)
+      log.info('exported printable schedule to', htmlPath)
+    } catch (err) {
+      log.error('printable schedule export failed:', err)
     }
   })
 }
