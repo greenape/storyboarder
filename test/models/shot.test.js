@@ -200,6 +200,40 @@ describe('models/shot', () => {
       shotModel.removeShot(boardData, boardData.shots[0].id)
       assert.strictEqual(boardData.shots.length, 1, 'the only shot is kept')
     })
+
+    it('is durable under reconcileShots — the merge is not resurrected on the next save', () => {
+      const boardData = { boards: boardsFromPattern('S.S.S.') } // shots: [u0,u1][u2,u3][u4,u5]
+      shotModel.migrateToShots(boardData)
+      const [first, mid, last] = boardData.shots
+
+      shotModel.removeShot(boardData, mid.id)
+      shotModel.reconcileShots(boardData)
+
+      assert.strictEqual(boardData.shots.length, 2, 'still merged after reconcile')
+      assert.deepStrictEqual(
+        boardData.shots.map(s => s.id).sort(),
+        [first.id, last.id].sort(),
+        'surviving ids unchanged'
+      )
+      const shotIds = new Set(boardData.shots.map(s => s.id))
+      for (const board of boardData.boards) {
+        assert.ok(shotIds.has(board.shotId), `board ${board.uid} shotId resolves`)
+      }
+      assert.deepStrictEqual(boardData.shots.map(s => s.label), ['1A', '2A'])
+    })
+
+    it('is durable under reconcileShots for an implicit-mode scene (no prior newShot boundaries)', () => {
+      const boardData = { boards: boardsFromPattern('...') } // no explicit shots → one shot per board
+      shotModel.migrateToShots(boardData)
+      assert.strictEqual(boardData.shots.length, 3, 'one shot per board before removal')
+
+      const middle = boardData.shots[1]
+      shotModel.removeShot(boardData, middle.id)
+      assert.strictEqual(boardData.shots.length, 2, 'merged, 3 boards in 2 shots')
+
+      shotModel.reconcileShots(boardData)
+      assert.strictEqual(boardData.shots.length, 2, 'still merged after reconcile')
+    })
   })
 
   describe('reconcileShots — shots[] stays correct across edits with stable IDs', () => {

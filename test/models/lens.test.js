@@ -58,26 +58,28 @@ describe('models/lens (lens-from-ShotGenerator)', () => {
     })
   })
 
-  describe('lensIdForBoard', () => {
+  describe('findOrCreateLensId', () => {
     it('creates a lens named for the focal length and returns its id', () => {
       const project = projectModel.defaultProject()
-      const id = lensModel.lensIdForBoard(project, sgBoard)
-      assert.ok(id)
-      const lens = project.breakdown.lensKit.find((l) => l.id === id)
+      const result = lensModel.findOrCreateLensId(project, sgBoard)
+      assert.ok(result.id)
+      assert.strictEqual(result.created, true, 'a new lens was minted')
+      const lens = project.breakdown.lensKit.find((l) => l.id === result.id)
       assert.strictEqual(lens.name, '24mm')
     })
 
     it('reuses an existing matching lens instead of duplicating', () => {
       const project = projectModel.defaultProject()
       const existing = projectModel.addVocabItem(project, 'lensKit', { name: '24mm' })
-      const id = lensModel.lensIdForBoard(project, sgBoard)
-      assert.strictEqual(id, existing.id, 'reused')
+      const result = lensModel.findOrCreateLensId(project, sgBoard)
+      assert.strictEqual(result.id, existing.id, 'reused')
+      assert.strictEqual(result.created, false, 'not minted, reused')
       assert.strictEqual(project.breakdown.lensKit.length, 1, 'no duplicate created')
     })
 
     it('returns null for a board with no 3D camera', () => {
       const project = projectModel.defaultProject()
-      assert.strictEqual(lensModel.lensIdForBoard(project, { uid: 'x' }), null)
+      assert.strictEqual(lensModel.findOrCreateLensId(project, { uid: 'x' }), null)
       assert.strictEqual(project.breakdown.lensKit.length, 0)
     })
   })

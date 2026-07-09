@@ -296,6 +296,7 @@ const drawBoardRow = (doc, { rect, scene, board, manifest, imagesPath }, cfg) =>
   //
   // board text
   //
+  const breakdownText = manifest && breakdownTextForBoard(scene, manifest, board)
   let entries = [
     ...(
       cfg.enableDialogue
@@ -316,8 +317,8 @@ const drawBoardRow = (doc, { rect, scene, board, manifest, imagesPath }, cfg) =>
     ),
 
     ...(
-      manifest && breakdownTextForBoard(scene, manifest, board)
-        ? [{ text: breakdownTextForBoard(scene, manifest, board), font: THIN, align: 'left' }]
+      breakdownText
+        ? [{ text: breakdownText, font: THIN, align: 'left' }]
         : []
     ),
 
@@ -540,11 +541,16 @@ const drawBoardColumn = (doc, { rect, container, scene, board, manifest, imagesP
     .save()
 
   const breakdownText = manifest && breakdownTextForBoard(scene, manifest, board)
+  // The breakdown slot is only appended (not a 4th literal `cond && {…}` element)
+  // so a board with no manifest/breakdown text keeps exactly 3 entries — the
+  // legacy divisor the non-`singleMultiLineTextField` branch below relies on
+  // (`entryCell.size[1] *= 1 / entries.length`). A literal falsy 4th slot would
+  // still count toward `entries.length`, silently shrinking every text cell.
   let entries = [
     cfg.enableDialogue && board.dialogue && { text: board.dialogue, font: BOLD },
     cfg.enableAction && board.action && { text: board.action, font: REGULAR },
     cfg.enableNotes && board.notes && { text: board.notes, font: THIN },
-    breakdownText && { text: breakdownText, font: THIN }
+    ...(breakdownText ? [{ text: breakdownText, font: THIN }] : [])
   ]
 
   if (localCfg.singleMultiLineTextField) {
@@ -720,9 +726,9 @@ function generate ({ project }, cfg) {
 
   // Phase 3: the breakdown vocabularies live in project.json beside the scenes;
   // read it once so each board can show its location / lens / cast in the export.
-  const breakdownManifest = (project.scenes && project.scenes.length)
-    ? projectModel.findAndReadProject(project.scenes[0].storyboarderFilePath)
-    : null
+  // (project.scenes[0] is dereferenced unguarded above for the PDF title, so no
+  // extra guard is needed here.)
+  const breakdownManifest = projectModel.findAndReadProject(project.scenes[0].storyboarderFilePath)
 
   let start = cfg.pages[0]
   let end = cfg.pages[1] + 1
@@ -756,7 +762,12 @@ function generate ({ project }, cfg) {
 
     // TODO extract helpers?
     const getBoardsCount = scene => scene.boards.length
-    const getShotsCount = scene => scene.boards.filter((board, i) => i == 0 || board.newShot).length
+    // Prefer the real shots[] model (present once a scene has been migrated);
+    // fall back to the legacy newShot-boundary count for an unmigrated scene.
+    const getShotsCount = scene =>
+      Array.isArray(scene.shots) && scene.shots.length
+        ? scene.shots.length
+        : scene.boards.filter((board, i) => i == 0 || board.newShot).length
 
     drawHeader(doc,
       {

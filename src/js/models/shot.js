@@ -69,9 +69,11 @@ const shotsFromBoards = boards => {
 // Board display labels ("1A", "1B", "2A") sourced from `shots[]` — the
 // shots-based equivalent of `updateSceneTiming`'s label computation. Boards in
 // shot N (1-based) get "<N><sub-shot letter>". Returns a `{ [uid]: label }` map.
-// This reproduces the legacy labels in BOTH modes (see the parity test), which
-// is what lets Phase 2 PR-C re-source the numbering loop from shots[] without
-// changing rendered output.
+// This reproduces the legacy labels in BOTH modes (see the parity test): it's the
+// parity-pinned equivalent of the legacy numbering loop, used by the tests (and by
+// future re-sourcing). The live renderer still computes labels in
+// `updateSceneTiming` directly from `newShot`, not from this — shots[] is only
+// reconciled at save time, so mid-edit labels can't be sourced from it yet.
 const boardLabelsFromShots = boardData => {
   const labels = {}
   boardData.shots.forEach((shot, shotIndex) => {
@@ -147,6 +149,17 @@ const reconcileShots = boardData => {
 // revival-plan §3.3 invariant 4 (the "re-parent" choice — a shot is a grouping,
 // so removing the grouping must not lose the drawings). Removing the shot's ids
 // from the Phase 4 schedule is handled where the schedule lives.
+//
+// `newShot` (not shots[]) is what `reconcileShots` re-derives shots[] from on
+// every save, so merging boardUids alone isn't durable: a merged board that still
+// carried `newShot: true` would make the very next reconcile re-split it back out,
+// resurrecting the shot we just deleted. So after merging, every board's `newShot`
+// flag is synced from the (now merged) shots[] — each shot's first board becomes
+// the sole boundary, every other board's flag is cleared — and every shot's label
+// is refreshed positionally to match. (For a scene with no explicit boundaries,
+// this also losslessly materialises one explicit boundary per remaining shot: since
+// every board was already its own shot, every board becomes a `newShot` boundary,
+// producing identical labels.)
 const removeShot = (boardData, shotId) => {
   const idx = boardData.shots.findIndex(shot => shot.id === shotId)
   if (idx === -1) return boardData
@@ -165,6 +178,20 @@ const removeShot = (boardData, shotId) => {
   })
 
   boardData.shots.splice(idx, 1)
+
+  // sync newShot boundaries from the merged shots[], so reconcileShots can't
+  // resurrect the deleted shot on the next save
+  boardData.shots.forEach(s => {
+    s.boardUids.forEach((uid, i) => {
+      const board = boardData.boards.find(b => b.uid === uid)
+      if (board) board.newShot = i === 0
+    })
+  })
+
+  // refresh labels positionally, matching how shotsFromBoards labels a shot's
+  // first board ("<N>A")
+  boardData.shots.forEach((s, i) => { s.label = `${i + 1}A` })
+
   return boardData
 }
 

@@ -382,6 +382,27 @@ remote.getCurrentWindow().on('focus', () => {
 // Loading / Init Operations
 ///////////////////////////////////////////////////////////////
 
+// Migrate a freshly-(re)loaded boardData in place: upgrade it to first-class shots
+// (revival-plan §3, idempotent — a scene that already carries shots[] is untouched)
+// and give it its breakdown metadata (id + location/cast/etc., idempotent), marking
+// the board file dirty when either migration actually ran so the change persists on
+// the next save. Shared by the initial load() AND loadScene() (next/prev scene, the
+// sidebar scene click, and undo/redo scene jumps all reassign boardData from disk),
+// so a never-migrated scene navigated to mid-session gets shots[]/metadata
+// immediately instead of only after its next save.
+const migrateLoadedScene = () => {
+  const hadShots = Array.isArray(boardData.shots) && boardData.shots.length > 0
+  shotModel.migrateToShots(boardData)
+  if (!hadShots && boardData.shots && boardData.shots.length) {
+    log.info('migrateToShots: derived', boardData.shots.length, 'shots from', boardData.boards.length, 'boards')
+    markBoardFileDirty()
+  }
+
+  const hadSceneMeta = Boolean(boardData.id && boardData.metadata)
+  sceneModel.migrateSceneMetadata(boardData)
+  if (!hadSceneMeta) markBoardFileDirty()
+}
+
 const load = async (event, args) => {
   try {
     if (args[1]) {
@@ -428,29 +449,10 @@ const load = async (event, args) => {
 
     migrateScene()
 
-    // Phase 2: upgrade the loaded scene to first-class shots (revival-plan §3).
-    // Idempotent — a scene that already carries shots[] is untouched, so shot IDs
-    // stay stable across loads. A freshly-migrated scene is marked dirty so the
-    // derived shots[] + board.shotId persist on the next save (invariant 1:
-    // loading and re-saving a legacy file produces shots[] with no visual change,
-    // since the numbering loop still renders from newShot until PR-C).
-    {
-      const hadShots = Array.isArray(boardData.shots) && boardData.shots.length > 0
-      shotModel.migrateToShots(boardData)
-      if (!hadShots && boardData.shots && boardData.shots.length) {
-        log.info('migrateToShots: derived', boardData.shots.length, 'shots from', boardData.boards.length, 'boards')
-        markBoardFileDirty()
-      }
-    }
-
-    // Phase 3: give the scene its breakdown metadata (id + location/cast/etc.,
-    // idempotent) and mark dirty so it persists; then load or create the
-    // project.json manifest (breakdown vocabularies) at the project root.
-    {
-      const hadSceneMeta = Boolean(boardData.id && boardData.metadata)
-      sceneModel.migrateSceneMetadata(boardData)
-      if (!hadSceneMeta) markBoardFileDirty()
-    }
+    // Phase 2/3: upgrade the loaded scene to first-class shots + breakdown metadata
+    // (see migrateLoadedScene()); then load or create the project.json manifest
+    // (breakdown vocabularies) at the project root.
+    migrateLoadedScene()
     loadOrCreateProjectManifest()
 
     await loadBoardUI()
@@ -3835,7 +3837,6 @@ const setupBreakdownInputs = () => {
   if (!locationSelect) return
 
   locationSelect.addEventListener('change', (e) => {
-    if (!boardData.metadata) boardData.metadata = sceneModel.defaultSceneMetadata()
     boardData.metadata.locationId = e.target.value || null
     markBoardFileDirty()
   })
@@ -3843,7 +3844,6 @@ const setupBreakdownInputs = () => {
   lensSelect.addEventListener('change', (e) => {
     const shot = currentShotForBoard()
     if (!shot) return
-    if (!shot.metadata) shot.metadata = {}
     shot.metadata.lensId = e.target.value || null
     markBoardFileDirty()
   })
@@ -3865,13 +3865,11 @@ const setupBreakdownInputs = () => {
     })
   }
   wireAdd(addLocation, 'locations', (id) => {
-    if (!boardData.metadata) boardData.metadata = sceneModel.defaultSceneMetadata()
     boardData.metadata.locationId = id
   })
   wireAdd(addLens, 'lensKit', (id) => {
     const shot = currentShotForBoard()
     if (shot) {
-      if (!shot.metadata) shot.metadata = {}
       shot.metadata.lensId = id
     }
   })
@@ -3882,12 +3880,10 @@ const setupBreakdownInputs = () => {
   lensFromSg && lensFromSg.addEventListener('click', () => {
     const shot = currentShotForBoard()
     if (!shot || !projectData) return
-    const before = projectData.breakdown.lensKit.length
-    const lensId = lensModel.lensIdForBoard(projectData, boardData.boards[currentBoard])
-    if (!lensId) return
-    if (projectData.breakdown.lensKit.length !== before) saveProjectFile() // a new lens was minted
-    if (!shot.metadata) shot.metadata = {}
-    shot.metadata.lensId = lensId
+    const found = lensModel.findOrCreateLensId(projectData, boardData.boards[currentBoard])
+    if (!found) return
+    if (found.created) saveProjectFile() // a new lens was minted
+    shot.metadata.lensId = found.id
     markBoardFileDirty()
     renderBreakdown()
   })
@@ -3905,7 +3901,6 @@ const setupBreakdownInputs = () => {
       member = projectModel.addVocabItem(projectData, 'cast', { name: trimmed })
       saveProjectFile()
     }
-    if (!boardData.metadata) boardData.metadata = sceneModel.defaultSceneMetadata()
     if (!boardData.metadata.castIds.includes(member.id)) {
       boardData.metadata.castIds.push(member.id)
       markBoardFileDirty()
@@ -3924,7 +3919,7 @@ const setupBreakdownInputs = () => {
   })
 
   // typing a vocab name must not fire drawing-tool keyboard shortcuts
-  for (const input of [addLocation, addLens, addCast]) {
+  for (const input of [addLocation, addLens, addCast, locationSelect, lensSelect]) {
     if (!input) continue
     input.addEventListener('focus', () => { textInputMode = true })
     input.addEventListener('blur', () => { textInputMode = false })
@@ -3936,8 +3931,6 @@ const setupBreakdownInputs = () => {
 // assignment, and the schedule's days. Assignments persist to project.json.schedule.
 // (The shot list is the loaded scene; a shot placed from another scene still shows
 // in its day, by id — a multi-scene aggregate view is a later refinement.)
-const shotDisplayLabel = shot => shot.label || shot.id
-
 const dayIdForShot = (schedule, shotId) => {
   const day = (schedule.days || []).find(d => d.shotIds.includes(shotId))
   return day ? day.id : ''
@@ -3993,6 +3986,18 @@ const gatherAllScenes = () => {
 // The current stripboard model (all scenes' shots + a flat index), rebuilt on demand.
 const stripboardModelNow = () => stripboardModel.buildStripboardModel(gatherAllScenes(), projectData)
 
+// Every stripboard interaction (day-select change, drag-drop, add/remove/reorder day,
+// group-by-location, CSV/HTML export) used to rebuild this model from scratch on every
+// click — synchronously re-reading and re-parsing every scene file on the UI thread.
+// Cache it for the life of one stripboard-panel session: openStripboard() clears the
+// cache before rendering (a scene edited since the panel was last open must be
+// re-read), and closeStripboard() clears it too, so nothing goes stale across a
+// re-open. Schedule mutations (day add/remove/reorder, shot assignment) don't
+// invalidate the cache — they change projectData.schedule, not the scenes the model
+// is built from.
+let stripboardCache = null
+const getStripboardModel = () => (stripboardCache ??= stripboardModelNow())
+
 // A stable colour per location name — the classic stripboard colour strip, so
 // same-location shots read as a group. Delegates to the shared model colour so the
 // on-screen strips and the printable export match; null → no colour.
@@ -4006,7 +4011,7 @@ const renderStripboard = () => {
   const schedule = projectData.schedule
 
   // aggregate every scene, then reconcile the schedule with the full shot set
-  const model = stripboardModelNow()
+  const model = getStripboardModel()
   scheduleModel.reconcileSchedule(schedule, model.allShotIds)
   const multiScene = model.shotsByScene.length > 1
 
@@ -4100,12 +4105,14 @@ const openStripboard = () => {
   const panel = document.querySelector('#stripboard-panel')
   if (!panel) return
   panel.style.display = ''
+  stripboardCache = null // a scene edited since the panel was last open must be re-read
   renderStripboard()
 }
 
 const closeStripboard = () => {
   const panel = document.querySelector('#stripboard-panel')
   if (panel) panel.style.display = 'none'
+  stripboardCache = null
 }
 
 const setupStripboard = () => {
@@ -4187,7 +4194,8 @@ const setupStripboard = () => {
   const groupBtn = document.querySelector('#stripboard-group-location')
   groupBtn && groupBtn.addEventListener('click', () => {
     if (!projectData) return
-    const model = stripboardModelNow()
+    if (projectData.schedule.days.length > 0 && !window.confirm('Replace the current schedule with one day per location?')) return
+    const model = getStripboardModel()
     const allShots = model.shotsByScene.flatMap(s => s.shots)
     projectData.schedule = scheduleModel.groupByLocation(
       allShots,
@@ -4201,7 +4209,7 @@ const setupStripboard = () => {
   const exportBtn = document.querySelector('#stripboard-export-csv')
   exportBtn && exportBtn.addEventListener('click', () => {
     if (!projectData || !projectRoot) return
-    const model = stripboardModelNow()
+    const model = getStripboardModel()
     const rowFor = (shotId) => {
       const info = model.shotIndex[shotId] || {}
       return {
@@ -4224,7 +4232,7 @@ const setupStripboard = () => {
   const exportHtmlBtn = document.querySelector('#stripboard-export-html')
   exportHtmlBtn && exportHtmlBtn.addEventListener('click', () => {
     if (!projectData || !projectRoot) return
-    const model = stripboardModelNow()
+    const model = getStripboardModel()
     const html = stripboardModel.scheduleToHtml(projectData.schedule, model.shotIndex, {
       title: `Shooting Schedule — ${path.basename(projectRoot)}`
     })
@@ -5317,6 +5325,7 @@ let loadScene = async (sceneNumber) => {
 
           boardFilename = path.join(currentPath, foundDirectoryName, foundDirectoryName + '.storyboarder')
           boardData = JSON.parse(fs.readFileSync(boardFilename))
+          migrateLoadedScene() // a scene navigated to mid-session may never have been migrated
         }
 
         // update UI to reflect current scene node
