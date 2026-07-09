@@ -91,26 +91,46 @@ async function main() {
   await cdp.enable()
   await sleep(SETTLE_MS)
 
-  // open the stripboard, add a day, assign the first shot to it
+  // set a scene location first (via the breakdown panel) so shots colour-code
+  await cdp.evaluate(`(() => {
+    const inp = document.querySelector('#breakdown-add-location')
+    inp.value = 'INT. KITCHEN'
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  })()`)
+
+  // open the stripboard, add a day
   await cdp.evaluate(`document.querySelector('#open-stripboard').click()`)
   await cdp.evaluate(`document.querySelector('#stripboard-add-day').click()`)
-  const assigned = await cdp.evaluate(`(() => {
-    const sel = document.querySelector('.stripboard-shot-day')
-    const dayOption = sel.options[1] // the day we just added (option 0 is Unscheduled)
-    sel.value = dayOption.value
-    sel.dispatchEvent(new Event('change', { bubbles: true }))
-    return dayOption.value
+
+  // polish 1 — colour-coding: the shot row carries its location + a colour stripe
+  const colour = JSON.parse(await cdp.evaluate(`JSON.stringify({
+    rowLocation: document.querySelector('.stripboard-shot-row').dataset.location || '',
+    rowStripe: document.querySelector('.stripboard-shot-row').style.borderLeft || ''
+  })`))
+  console.log('colour:', JSON.stringify(colour))
+  if (colour.rowLocation !== 'INT. KITCHEN') return fail(`shot row missing location: ${colour.rowLocation}`)
+  if (!/solid/.test(colour.rowStripe)) return fail(`shot row missing colour stripe: ${colour.rowStripe}`)
+
+  // polish 2 — drag-drop: drag the first shot onto the day (synthetic HTML5 DnD
+  // with a shared DataTransfer, which Chromium honours)
+  await cdp.evaluate(`(() => {
+    const row = document.querySelector('.stripboard-shot-row')
+    const day = document.querySelector('.stripboard-day')
+    const dt = new DataTransfer()
+    row.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }))
+    day.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }))
+    day.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }))
   })()`)
 
   const dom = JSON.parse(await cdp.evaluate(`JSON.stringify({
     dayCount: document.querySelectorAll('#stripboard-days .stripboard-day').length,
     chipCount: document.querySelectorAll('#stripboard-days .stripboard-chip').length,
-    selValue: document.querySelector('.stripboard-shot-day').value
+    chipLocation: (() => { const c = document.querySelector('#stripboard-days .stripboard-chip'); return c ? (c.dataset.location || '') : '' })()
   })`))
-  console.log('DOM after drive:', JSON.stringify({ ...dom, assigned }))
+  console.log('DOM after drag:', JSON.stringify(dom))
   if (dom.dayCount !== 1) return fail(`expected 1 day, got ${dom.dayCount}`)
-  if (dom.chipCount !== 1) return fail(`expected 1 scheduled shot chip, got ${dom.chipCount}`)
-  if (dom.selValue !== assigned) return fail(`shot's day select did not stick`)
+  if (dom.chipCount !== 1) return fail(`drag-drop did not place the shot (chips=${dom.chipCount})`)
+  if (dom.chipLocation !== 'INT. KITCHEN') return fail(`scheduled chip not colour-tagged: ${dom.chipLocation}`)
 
   await sleep(7000) // project.json is written immediately on assign; allow for it
 

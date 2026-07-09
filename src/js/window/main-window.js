@@ -3950,6 +3950,15 @@ const shotBreakdownSummary = (shotId) => {
   return firstBoard ? sceneModel.breakdownSummaryForBoard(boardData, projectData, firstBoard) : null
 }
 
+// A stable colour per location name — the classic stripboard colour strip, so
+// same-location shots read as a group across both the shot list and the schedule.
+const locationColorFor = (name) => {
+  if (!name) return null
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  return `hsl(${Math.abs(hash) % 360}, 45%, 42%)`
+}
+
 const renderStripboard = () => {
   const shotListEl = document.querySelector('#stripboard-shot-list')
   const daysEl = document.querySelector('#stripboard-days')
@@ -3963,10 +3972,16 @@ const renderStripboard = () => {
   for (const shot of shots) {
     const row = document.createElement('div')
     row.className = 'stripboard-shot-row'
+    row.draggable = true
+    row.dataset.shotId = shot.id
 
     const firstBoard = boardData.boards.find(b => b.uid === shot.boardUids[0])
     const summary = firstBoard ? sceneModel.breakdownSummaryForBoard(boardData, projectData, firstBoard) : null
     const hint = summary && summary.location ? ` · ${summary.location}` : ''
+    if (summary && summary.location) {
+      row.dataset.location = summary.location
+      row.style.borderLeft = `4px solid ${locationColorFor(summary.location)}`
+    }
 
     const label = document.createElement('span')
     label.className = 'stripboard-shot-label'
@@ -3999,6 +4014,7 @@ const renderStripboard = () => {
   for (const day of schedule.days) {
     const dayEl = document.createElement('div')
     dayEl.className = 'stripboard-day'
+    dayEl.dataset.dayId = day.id
 
     const head = document.createElement('div')
     head.className = 'stripboard-day-head'
@@ -4016,6 +4032,11 @@ const renderStripboard = () => {
       const chip = document.createElement('span')
       chip.className = 'stripboard-chip'
       chip.textContent = labelById[shotId] || shotId
+      const summary = shotBreakdownSummary(shotId)
+      if (summary && summary.location) {
+        chip.dataset.location = summary.location
+        chip.style.background = locationColorFor(summary.location)
+      }
       chips.appendChild(chip)
     }
     dayEl.appendChild(chips)
@@ -4052,13 +4073,38 @@ const setupStripboard = () => {
     renderStripboard()
   })
 
-  // assign a shot to a day (or back to unscheduled)
+  // assign a shot to a day (or back to unscheduled) via the select
   shotListEl && shotListEl.addEventListener('change', (e) => {
     const select = e.target.closest('.stripboard-shot-day')
     if (!select || !projectData) return
     const shotId = select.dataset.shotId
     if (select.value) scheduleModel.moveShotToDay(projectData.schedule, shotId, select.value)
     else scheduleModel.moveShotToUnscheduled(projectData.schedule, shotId)
+    saveProjectFile()
+    renderStripboard()
+  })
+
+  // …or drag a shot from the list onto a day (the classic stripboard gesture)
+  shotListEl && shotListEl.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('.stripboard-shot-row')
+    if (!row) return
+    e.dataTransfer.setData('text/plain', row.dataset.shotId)
+    e.dataTransfer.effectAllowed = 'move'
+  })
+  daysEl && daysEl.addEventListener('dragover', (e) => {
+    const dayEl = e.target.closest('.stripboard-day')
+    if (dayEl) {
+      e.preventDefault() // permit the drop
+      e.dataTransfer.dropEffect = 'move'
+    }
+  })
+  daysEl && daysEl.addEventListener('drop', (e) => {
+    const dayEl = e.target.closest('.stripboard-day')
+    if (!dayEl || !projectData) return
+    e.preventDefault()
+    const shotId = e.dataTransfer.getData('text/plain')
+    if (!shotId) return
+    scheduleModel.moveShotToDay(projectData.schedule, shotId, dayEl.dataset.dayId)
     saveProjectFile()
     renderStripboard()
   })

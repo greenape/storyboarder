@@ -1043,3 +1043,9 @@ input[type=range]:focus::-webkit-slider-runnable-track {
 .stripboard-day-head { display: flex; align-items: center; font-weight: bold; font-size: 12px; margin-bottom: 4px; }
 .stripboard-day-head .stripboard-day-remove { margin-left: auto; }
 .stripboard-chip { display: inline-block; background: #4a4a4a; border-radius: 8px; padding: 1px 6px; margin: 2px; font-size: 11px; }
+
+/* Phase 4 polish — stripboard drag + colour */
+.stripboard-shot-row { cursor: grab; }
+.stripboard-shot-row:active { cursor: grabbing; }
+.stripboard-day { transition: background 0.1s ease; }
+.stripboard-day:hover { background: rgba(255, 255, 255, 0.03); }
