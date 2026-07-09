@@ -64,6 +64,7 @@ const sceneModel = require('../models/scene')
 const projectModel = require('../models/project')
 const lensModel = require('../models/lens')
 const scheduleModel = require('../models/schedule')
+const stripboardModel = require('../models/stripboard')
 const watermarkModel = require('../models/watermark')
 
 const AudioPlayback = require('./audio-playback')
@@ -3942,13 +3943,55 @@ const dayIdForShot = (schedule, shotId) => {
   return day ? day.id : ''
 }
 
-// Resolve a shot's breakdown summary (location/lens/cast names) via its first board.
-const shotBreakdownSummary = (shotId) => {
-  const shot = (boardData.shots || []).find(s => s.id === shotId)
-  if (!shot) return null
-  const firstBoard = boardData.boards.find(b => b.uid === shot.boardUids[0])
-  return firstBoard ? sceneModel.breakdownSummaryForBoard(boardData, projectData, firstBoard) : null
+// Gather every scene of the project for the stripboard. A script project keeps its
+// scenes in storyboards/Scene-N-*/ (currentPath); a single-file project has just the
+// loaded scene. Off-screen scenes are read from disk, migrated in memory, and their
+// migration is written back so shot ids stay stable for the schedule to reference.
+const sceneNumberOf = (folder) => {
+  const m = /^Scene-(\d+)-/.exec(folder)
+  return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER
 }
+
+const gatherAllScenes = () => {
+  const scenes = []
+  const isDir = (p) => { try { return fs.statSync(p).isDirectory() } catch { return false } }
+
+  if (currentPath && fs.existsSync(currentPath)) {
+    const folders = fs.readdirSync(currentPath)
+      .filter(f => isDir(path.join(currentPath, f)) && /^Scene-\d+/.test(f))
+      .sort((a, b) => sceneNumberOf(a) - sceneNumberOf(b))
+    for (const folder of folders) {
+      const dir = path.join(currentPath, folder)
+      let files
+      try { files = fs.readdirSync(dir).filter(f => f.endsWith('.storyboarder')) } catch { continue }
+      if (!files.length) continue
+      const scenePath = path.join(dir, files[0])
+
+      if (scenePath === boardFilename) {
+        scenes.push({ path: scenePath, title: folder, data: boardData }) // the loaded (possibly edited) scene
+        continue
+      }
+      let data
+      try { data = JSON.parse(fs.readFileSync(scenePath)) } catch { continue }
+      const hadShots = Array.isArray(data.shots) && data.shots.length > 0
+      const hadMeta = Boolean(data.id && data.metadata)
+      shotModel.migrateToShots(data)
+      sceneModel.migrateSceneMetadata(data)
+      if (!hadShots || !hadMeta) {
+        try { fs.writeFileSync(scenePath, JSON.stringify(data, null, 2)) } catch (err) { log.error('stripboard: could not persist scene migration', err) }
+      }
+      scenes.push({ path: scenePath, title: folder, data })
+    }
+  }
+
+  if (!scenes.length) {
+    scenes.push({ path: boardFilename, title: (boardData && boardData.title) || 'Scene', data: boardData })
+  }
+  return scenes
+}
+
+// The current stripboard model (all scenes' shots + a flat index), rebuilt on demand.
+const stripboardModelNow = () => stripboardModel.buildStripboardModel(gatherAllScenes(), projectData)
 
 // A stable colour per location name — the classic stripboard colour strip, so
 // same-location shots read as a group across both the shot list and the schedule.
@@ -3965,51 +4008,59 @@ const renderStripboard = () => {
   if (!shotListEl || !daysEl || !projectData || !boardData) return
   scheduleModel.ensureSchedule(projectData.schedule)
   const schedule = projectData.schedule
-  const shots = boardData.shots || []
 
-  // left: the scene's shots (story order), each with a day <select> + location hint
+  // aggregate every scene, then reconcile the schedule with the full shot set
+  const model = stripboardModelNow()
+  scheduleModel.reconcileSchedule(schedule, model.allShotIds)
+  const multiScene = model.shotsByScene.length > 1
+
+  // left: shots grouped by scene (story order), each with a day <select> + location stripe
   shotListEl.innerHTML = ''
-  for (const shot of shots) {
-    const row = document.createElement('div')
-    row.className = 'stripboard-shot-row'
-    row.draggable = true
-    row.dataset.shotId = shot.id
-
-    const firstBoard = boardData.boards.find(b => b.uid === shot.boardUids[0])
-    const summary = firstBoard ? sceneModel.breakdownSummaryForBoard(boardData, projectData, firstBoard) : null
-    const hint = summary && summary.location ? ` · ${summary.location}` : ''
-    if (summary && summary.location) {
-      row.dataset.location = summary.location
-      row.style.borderLeft = `4px solid ${locationColorFor(summary.location)}`
+  for (const sceneEntry of model.shotsByScene) {
+    if (multiScene) {
+      const header = document.createElement('div')
+      header.className = 'stripboard-scene-header'
+      header.textContent = sceneEntry.title
+      shotListEl.appendChild(header)
     }
+    for (const shot of sceneEntry.shots) {
+      const row = document.createElement('div')
+      row.className = 'stripboard-shot-row'
+      row.draggable = true
+      row.dataset.shotId = shot.id
 
-    const label = document.createElement('span')
-    label.className = 'stripboard-shot-label'
-    label.textContent = shotDisplayLabel(shot) + hint
+      const hint = shot.location ? ` · ${shot.location}` : ''
+      if (shot.location) {
+        row.dataset.location = shot.location
+        row.style.borderLeft = `4px solid ${locationColorFor(shot.location)}`
+      }
 
-    const select = document.createElement('select')
-    select.className = 'stripboard-shot-day'
-    select.dataset.shotId = shot.id
-    const none = document.createElement('option')
-    none.value = ''
-    none.textContent = 'Unscheduled'
-    select.appendChild(none)
-    for (const day of schedule.days) {
-      const opt = document.createElement('option')
-      opt.value = day.id
-      opt.textContent = day.label
-      select.appendChild(opt)
+      const label = document.createElement('span')
+      label.className = 'stripboard-shot-label'
+      label.textContent = shot.label + hint
+
+      const select = document.createElement('select')
+      select.className = 'stripboard-shot-day'
+      select.dataset.shotId = shot.id
+      const none = document.createElement('option')
+      none.value = ''
+      none.textContent = 'Unscheduled'
+      select.appendChild(none)
+      for (const day of schedule.days) {
+        const opt = document.createElement('option')
+        opt.value = day.id
+        opt.textContent = day.label
+        select.appendChild(opt)
+      }
+      select.value = dayIdForShot(schedule, shot.id)
+
+      row.appendChild(label)
+      row.appendChild(select)
+      shotListEl.appendChild(row)
     }
-    select.value = dayIdForShot(schedule, shot.id)
-
-    row.appendChild(label)
-    row.appendChild(select)
-    shotListEl.appendChild(row)
   }
 
-  // right: the schedule, day by day
-  const labelById = {}
-  for (const shot of shots) labelById[shot.id] = shotDisplayLabel(shot)
+  // right: the schedule, day by day — chips resolved via the flat index (any scene)
   daysEl.innerHTML = ''
   for (const day of schedule.days) {
     const dayEl = document.createElement('div')
@@ -4034,13 +4085,13 @@ const renderStripboard = () => {
 
     const chips = document.createElement('div')
     for (const shotId of day.shotIds) {
+      const info = model.shotIndex[shotId]
       const chip = document.createElement('span')
       chip.className = 'stripboard-chip'
-      chip.textContent = labelById[shotId] || shotId
-      const summary = shotBreakdownSummary(shotId)
-      if (summary && summary.location) {
-        chip.dataset.location = summary.location
-        chip.style.background = locationColorFor(summary.location)
+      chip.textContent = info ? info.label : shotId
+      if (info && info.location) {
+        chip.dataset.location = info.location
+        chip.style.background = locationColorFor(info.location)
       }
       chips.appendChild(chip)
     }
@@ -4139,12 +4190,13 @@ const setupStripboard = () => {
   // auto-suggest: one day per location
   const groupBtn = document.querySelector('#stripboard-group-location')
   groupBtn && groupBtn.addEventListener('click', () => {
-    if (!projectData || !boardData) return
-    const locationOf = (shotId) => {
-      const summary = shotBreakdownSummary(shotId)
-      return summary && summary.location
-    }
-    projectData.schedule = scheduleModel.groupByLocation(boardData.shots || [], locationOf)
+    if (!projectData) return
+    const model = stripboardModelNow()
+    const allShots = model.shotsByScene.flatMap(s => s.shots)
+    projectData.schedule = scheduleModel.groupByLocation(
+      allShots,
+      (id) => model.shotIndex[id] && model.shotIndex[id].location
+    )
     saveProjectFile()
     renderStripboard()
   })
@@ -4153,14 +4205,13 @@ const setupStripboard = () => {
   const exportBtn = document.querySelector('#stripboard-export-csv')
   exportBtn && exportBtn.addEventListener('click', () => {
     if (!projectData || !projectRoot) return
-    const labelById = {}
-    for (const shot of (boardData.shots || [])) labelById[shot.id] = shotDisplayLabel(shot)
+    const model = stripboardModelNow()
     const rowFor = (shotId) => {
-      const summary = shotBreakdownSummary(shotId)
+      const info = model.shotIndex[shotId] || {}
       return {
-        shot: labelById[shotId] || shotId,
-        location: summary && summary.location ? summary.location : '',
-        cast: summary && summary.cast ? summary.cast.join('; ') : ''
+        shot: info.label || shotId,
+        location: info.location || '',
+        cast: (info.cast || []).join('; ')
       }
     }
     const csv = scheduleModel.scheduleToCsv(projectData.schedule, rowFor)
