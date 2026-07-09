@@ -1053,3 +1053,6 @@ input[type=range]:focus::-webkit-slider-runnable-track {
 /* Phase 4 polish — day reorder controls */
 .stripboard-day-title { flex: 1; }
 .stripboard-day-head button { margin-left: 4px; }
+
+/* multi-scene stripboard — scene grouping header */
+.stripboard-scene-header { font-weight: bold; font-size: 11px; text-transform: uppercase; color: #88aacc; margin: 8px 0 2px; }
