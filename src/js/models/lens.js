@@ -41,9 +41,11 @@ const parseLensMm = (name) => {
 }
 
 // Resolve (find or create) the lens-kit id matching a board's 3D camera. Mutates
-// project.breakdown.lensKit when a matching lens doesn't exist yet. Returns the lens
-// id, or null when the board has no camera fov.
-const lensIdForBoard = (project, board) => {
+// project.breakdown.lensKit when a matching lens doesn't exist yet. Returns
+// `{ id, created }` (`created` true iff a new lens was minted this call), or null
+// when the board has no camera fov — so a caller can tell "minted a new lens" from
+// "reused an existing one" without diffing lensKit.length itself.
+const findOrCreateLensId = (project, board) => {
   const fov = cameraFovFromBoard(board)
   if (fov == null) return null
 
@@ -54,8 +56,12 @@ const lensIdForBoard = (project, board) => {
     const parsed = parseLensMm(item.name)
     return parsed != null && Math.abs(parsed - mm) < 1
   })
-  if (!lens) lens = projectModel.addVocabItem(project, 'lensKit', { name: `${mm}mm` })
-  return lens.id
+  let created = false
+  if (!lens) {
+    lens = projectModel.addVocabItem(project, 'lensKit', { name: `${mm}mm` })
+    created = true
+  }
+  return { id: lens.id, created }
 }
 
 module.exports = {
@@ -64,5 +70,5 @@ module.exports = {
   focalLengthFromFov,
   cameraFovFromBoard,
   parseLensMm,
-  lensIdForBoard
+  findOrCreateLensId
 }

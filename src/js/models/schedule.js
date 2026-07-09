@@ -17,9 +17,11 @@ const makeDayId = () => DAY_ID_PREFIX + util.uidGen(6).toLowerCase()
 
 const emptySchedule = () => ({ days: [], unscheduled: [] })
 
-// Normalise a possibly-partial schedule so the ops below are always safe.
+// Normalise a possibly-PARTIAL schedule object (backfilling missing/malformed
+// `days`/`unscheduled`) so the ops below are always safe. `schedule` must be
+// non-null — every real caller passes an object (main-window's `projectData.schedule`,
+// or one freshly minted here), never null.
 const ensureSchedule = schedule => {
-  if (!schedule) return emptySchedule()
   if (!Array.isArray(schedule.days)) schedule.days = []
   if (!Array.isArray(schedule.unscheduled)) schedule.unscheduled = []
   for (const day of schedule.days) {

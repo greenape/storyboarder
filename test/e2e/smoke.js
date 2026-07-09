@@ -71,14 +71,36 @@ const child = spawn(electron, args, {
 child.stdout.on('data', (d) => log.push(d.toString()))
 child.stderr.on('data', (d) => log.push(d.toString()))
 
-setTimeout(() => {
+let weKilledChild = false // set once our own SIGTERM/SIGKILL shutdown starts
+let finished = false
+
+// spawn() can fail asynchronously (e.g. the electron binary is missing); without
+// this the 'error' event goes unhandled and crashes the process, leaking workDir.
+child.on('error', (err) => {
+  log.push(`\n[spawn error] ${err.message}\n`)
+  finish()
+})
+
+const settleTimer = setTimeout(() => {
+  weKilledChild = true
   try {
     child.kill('SIGTERM')
   } catch {}
   setTimeout(finish, 1500)
 }, SETTLE_MS)
 
+// An instant crash shouldn't burn the full SETTLE_MS before we notice and report.
+child.on('exit', (code, signal) => {
+  if (weKilledChild) return // expected exit from our own shutdown above — don't double-finish
+  log.push(`\napp exited early: code=${code} signal=${signal}\n`)
+  console.log(`app exited early: code=${code} signal=${signal}`)
+  clearTimeout(settleTimer)
+  finish()
+})
+
 function finish() {
+  if (finished) return
+  finished = true
   try {
     child.kill('SIGKILL')
   } catch {}
@@ -122,7 +144,9 @@ function finish() {
 
   try {
     fs.removeSync(workDir)
-  } catch {}
+  } catch (err) {
+    console.log('warning: failed to remove temp workDir:', err.message)
+  }
 
   const ok = rendered && fatals.length === 0
   if (!ok) {

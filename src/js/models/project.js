@@ -105,8 +105,10 @@ const renameVocabItem = (project, kind, id, name) => {
   return item
 }
 
-// Remove a vocab item from the project. Returns the removed id (or null) so the
-// caller can drive scene.cleanupSceneReferences across the open scenes.
+// Remove a vocab item from the project. Returns the removed id (or null) so a
+// caller could drive scene.cleanupSceneReferences across the open scenes — but
+// the vocab-management UI that would drive that isn't built yet; tests pin the
+// behaviour meanwhile.
 const removeVocabItem = (project, kind, id) => {
   ensureBreakdown(project)
   const before = project.breakdown[kind].length
@@ -119,9 +121,8 @@ const projectFilePath = projectRoot => path.join(projectRoot, PROJECT_FILENAME)
 const projectExists = projectRoot => fs.existsSync(projectFilePath(projectRoot))
 
 const readProject = projectRoot => {
-  const filePath = projectFilePath(projectRoot)
-  if (!fs.existsSync(filePath)) return null
-  return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+  if (!projectExists(projectRoot)) return null
+  return JSON.parse(fs.readFileSync(projectFilePath(projectRoot), 'utf8'))
 }
 
 // Walk up from a scene file's directory to find + read the project.json manifest

@@ -16,6 +16,9 @@ SceneData
 const fs = require('fs-extra')
 const path = require('path')
 
+const shotModel = require('../../models/shot')
+const sceneModel = require('../../models/scene')
+
 const last = arr => arr[arr.length - 1]
 
 const getDirectories = filepath =>
@@ -62,12 +65,22 @@ const scenesFromScriptData = (
         // load data from disk
         let dir = directoriesBySceneId[last(scene.scene_id.split('-'))]
         let storyboarderFilePath = path.join(path.dirname(filepath), 'storyboards', dir, `${dir}.storyboarder`)
+        let data = JSON.parse(fs.readFileSync(storyboarderFilePath, 'utf-8'))
+
+        // A scene loaded straight off disk (not the one currently open in the
+        // editor) never ran the load-time migration, so board.shotId /
+        // scene.metadata are missing and the PDF breakdown line silently
+        // vanishes for it. Migrate in memory only — the print window never
+        // writes scenes back to disk.
+        shotModel.migrateToShots(data)
+        sceneModel.migrateSceneMetadata(data)
+
         return {
           sceneId: scene.scene_id,
           sceneNumber: scene.scene_number,
           storyboarderFilePath,
           title: scene.slugline,
-          data: JSON.parse(fs.readFileSync(storyboarderFilePath, 'utf-8'))
+          data
         }
       }
     })

@@ -58,16 +58,18 @@ const resolveShotMetadata = (boardData, shot) => {
   return {
     lensId: meta.lensId != null ? meta.lensId : null,
     locationId: resolveShotLocationId(boardData, shot),
-    castIds: Array.isArray(meta.castIds) ? meta.castIds : [],
-    cameraMove: meta.cameraMove != null ? meta.cameraMove : null,
+    // copy, not the live array — this is a read-only view
+    castIds: Array.isArray(meta.castIds) ? [...meta.castIds] : [],
+    cameraMove: meta.cameraMove != null ? meta.cameraMove : 'static',
     notes: meta.notes != null ? meta.notes : ''
   }
 }
 
 // When a project-level vocab item is deleted, drop references to it from a
 // scene's own metadata and every shot in the scene. Scenes are separate files, so
-// the caller applies this across each loaded scene after project.removeVocabItem.
-// `kind` is a project.VOCAB_KINDS value.
+// a caller would apply this across each loaded scene after project.removeVocabItem
+// — but the vocab-management UI that would drive that isn't built yet; tests pin
+// the behaviour meanwhile. `kind` is a project.VOCAB_KINDS value.
 const cleanupSceneReferences = (boardData, kind, id) => {
   if (!boardData || id == null) return boardData
 
