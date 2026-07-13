@@ -7,10 +7,13 @@ name: Release build
 # `vX.Y.Z[-alpha.N]`, push the tag.
 #
 # Notes / current limits:
-#   * Unsigned. Signing/notarization is skipped (CSC_IDENTITY_AUTO_DISCOVERY=false), so
-#     macOS Gatekeeper warns ("unidentified developer" — right-click → Open, or
+#   * No Developer ID / notarization (CSC_IDENTITY_AUTO_DISCOVERY=false — no Apple
+#     credentials in CI). The afterPack hook (scripts/afterpack-adhoc-sign.js) ad-hoc
+#     signs the full bundle so the app is at least VALIDLY signed: without it macOS
+#     reports a quarantined download as "damaged" (a dead end); with it users get the
+#     standard un-notarized flow (System Settings → "Open Anyway" on macOS 15+, or
 #     `xattr -dr com.apple.quarantine Storyboarder.app`). Wire in the owner's Apple /
-#     Windows credentials as secrets to remove that friction.
+#     Windows credentials as secrets to remove the warning entirely.
 #   * macOS is arm64 (Apple Silicon) only: npmRebuild is off (the Electron 42 toolchain
 #     can't rebuild some old dev-only native deps — see package.json), so a universal /
 #     x64 build would ship single-arch native modules. Revisit with the webpack 5 work.

@@ -1,7 +1,7 @@
 {
   "name": "storyboarder",
   "productName": "Storyboarder",
-  "version": "3.1.0-alpha.1",
+  "version": "3.1.0-alpha.2",
   "description": "The fastest way to storyboard.",
   "main": "src/js/main.js",
   "engines": {
@@ -149,7 +149,8 @@
     },
     "appImage": {
       "license": "build/license_en.txt"
-    }
+    },
+    "afterPack": "scripts/afterpack-adhoc-sign.js"
   },
   "browserslist": [
     "last 1 Chrome version"
