@@ -23,12 +23,9 @@ const {
 } = require('../../models/scene')
 const projectModel = require('../../models/project')
 
-const fontPath = path.join('.', 'src', 'fonts')
-const THIN = path.join(fontPath, 'thicccboi', 'THICCCBOI-Thin.woff2')
-const BOLD = path.join(fontPath, 'thicccboi', 'THICCCBOI-Bold.woff2')
-const REGULAR = path.join(fontPath, 'thicccboi', 'THICCCBOI-Regular.woff2')
-const FALLBACK = path.join(fontPath, 'unicore.ttf')
-const FALLBACK_BOLD = path.join(fontPath, 'unicore.ttf') // TODO bold version of unicore?
+// Fonts resolve file-relative (NOT cwd-relative — that broke packaged-app export);
+// see ./fonts.js for the how and why.
+const { THIN, BOLD, REGULAR, FALLBACK, FALLBACK_BOLD } = require('./fonts')
 
 const ELLIPSES = '[…]'
 
