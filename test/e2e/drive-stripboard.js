@@ -27,6 +27,16 @@ async function body(cdp, { targetPath }) {
   // open the stripboard
   await cdp.evaluate(`document.querySelector('#open-stripboard').click()`)
 
+  // regression pin (alpha.2 field report): the frameless window's 70px
+  // -webkit-app-region:drag strip (#drag-handle) swallows PHYSICAL clicks at the
+  // window-manager level — synthetic/CDP clicks bypass it, so this suite can't catch
+  // the failure directly. Instead pin the computed style that opts the panel out.
+  const appRegion = await cdp.evaluate(
+    `getComputedStyle(document.querySelector('#stripboard-panel')).getPropertyValue('-webkit-app-region')`
+  )
+  console.log('panel app-region:', JSON.stringify(appRegion))
+  if (appRegion !== 'no-drag') throw new Error(`stripboard panel must be app-region no-drag (got '${appRegion}') — its header sits inside the window drag strip and real clicks would be swallowed`)
+
   // polish 3 — reorder days: add two, move the first down, verify the order swaps,
   // then clear the days so the rest of the flow starts fresh
   await cdp.evaluate(`document.querySelector('#stripboard-add-day').click()`)
